@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireRole } from '@/lib/apiAuth';
+
+// Never run at build time: `next build` pre-renders GET handlers that don't read the request,
+// which sent this real CreateCustomer to FlexCube on every build.
+export const dynamic = 'force-dynamic';
 
 /**
  * TEST ENDPOINT: Send the EXACT working Fayda XML to FlexCube
@@ -6,8 +11,12 @@ import { NextRequest, NextResponse } from 'next/server';
  * GET /api/flexcube/test — sends the exact working XML (with random NATIONID)
  *
  * This is to verify the FlexCube endpoint works with the known-good XML format.
+ * It creates a real test customer in FlexCube, so it is admin-only.
  */
 export async function GET(request: NextRequest) {
+  const denied = requireRole(request, ['admin']);
+  if (denied) return denied;
+
   const url = 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService';
   const timeout = 30000;
 
