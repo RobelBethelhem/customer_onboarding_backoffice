@@ -855,6 +855,7 @@ export interface QueryCustomerResult {
   email?: string;
   branch?: string;
   message: string;
+  connectionError?: boolean;  // true when FlexCube could not be reached (not the same as "not found")
 }
 
 export async function queryCustomerByCustNo(
@@ -903,6 +904,7 @@ export async function queryCustomerByCustNo(
       success: false,
       customerNumber: custNo,
       message: `FlexCube connection error: ${error.message}`,
+      connectionError: true,
     };
   }
 }
@@ -1016,6 +1018,31 @@ export async function createAccount(
 }
 
 /**
+ * Open a new account under a CIF that already exists (CreateCustAcc only — no CreateCustomer).
+ * Used for applicants who already bank with Zemen, and as step 2 of createCustomerAndAccount.
+ */
+export async function createAccountForCIF(
+  data: { cifNumber: string; customerName: string; branchCode: string; tierId: string },
+  config: FlexCubeConfig = defaultFlexCubeConfig
+): Promise<CreateAccountResult> {
+  // FYDA_USR doesn't have CreateCustAcc rights (GW-ROUT0008), so use IB_SER for account creation
+  const accountConfig: FlexCubeConfig = {
+    ...config,
+    userId: 'IB_SER',
+    source: 'EXTFYDA',
+  };
+  console.log(`[FlexCube] Switching to IB_SER for account creation (FYDA_USR lacks CreateCustAcc rights)`);
+  return createAccount({
+    cifNumber: data.cifNumber,
+    customerName: data.customerName,
+    branchCode: data.branchCode || config.defaultBranch,
+    accountClass: getAccountClass(data.tierId),
+    tierId: data.tierId,
+    currency: 'ETB',
+  }, accountConfig);
+}
+
+/**
  * Full flow: Create CIF + Create Account in FlexCube
  * This is the main function called during approval.
  *
@@ -1075,22 +1102,12 @@ export async function createCustomerAndAccount(
   }
 
   // ── Step 2: Create Account using CIF ──
-  // FYDA_USR doesn't have CreateCustAcc rights (GW-ROUT0008), so use IB_SER for account creation
-  const accountConfig: FlexCubeConfig = {
-    ...config,
-    userId: 'IB_SER',
-    source: 'EXTFYDA',
-  };
-  console.log(`[FlexCube] Switching to IB_SER for account creation (FYDA_USR lacks CreateCustAcc rights)`);
-  const accountClass = getAccountClass(customerData.accountTypeId);
-  const accountResult = await createAccount({
+  const accountResult = await createAccountForCIF({
     cifNumber: cifResult.cifNumber,
     customerName: customerData.fullName,
-    branchCode: customerData.branchCode || config.defaultBranch,
-    accountClass: getAccountClass(customerData.tierId),
+    branchCode: customerData.branchCode,
     tierId: customerData.tierId,
-    currency: 'ETB',
-  }, accountConfig);
+  }, config);
 
   if (!accountResult.success || !accountResult.accountNumber) {
     return {

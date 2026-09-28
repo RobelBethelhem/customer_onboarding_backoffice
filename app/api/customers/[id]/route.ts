@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
 import WorkflowSettings, { defaultWorkflowSettings } from '@/lib/models/WorkflowSettings';
-import { createCustomerAndAccount, FlexCubeConfig, queryCustomerByCustNo } from '@/lib/flexcube';
+import { createCustomerAndAccount, createAccountForCIF, FlexCubeConfig, queryCustomerByCustNo } from '@/lib/flexcube';
 import { distributeReferralRewards } from '@/lib/referralRewards';
 import Referral from '@/lib/models/Referral';
 import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConfig';
@@ -138,6 +138,8 @@ export async function PATCH(
 
       const flexcubeEnabled = settings.flexcubeEnabled !== false;
       const flexcubeConfig = getFlexCubeConfig(settings);
+      // Existing customer: their CIF already exists, so only a new account is opened under it
+      const existingCif = customer.isExistingCustomer ? (customer.existingCif || '') : '';
 
       // Parse name parts
       const nameParts = customer.fullName.trim().split(/\s+/);
@@ -151,41 +153,48 @@ export async function PATCH(
 
       if (flexcubeEnabled) {
         // ========== REAL FLEXCUBE INTEGRATION ==========
-        // Call FlexCube SOAP webservice to create CIF + Account
-        console.log(`\n[FlexCube] Starting ${action} for customer: ${customer.fullName} (${customer.customerId})`);
+        // Call FlexCube SOAP webservice to create CIF + Account (existing customer: account only)
+        console.log(`\n[FlexCube] Starting ${action} for customer: ${customer.fullName} (${customer.customerId})${existingCif ? ` — existing CIF ${existingCif}, account only` : ''}`);
 
-        const result = await createCustomerAndAccount({
-          fullName: customer.fullName,
-          firstName,
-          middleName,
-          lastName,
-          dateOfBirth: customer.dateOfBirth || '',
-          gender: customer.gender === 'female' ? 'F' : 'M',
-          phone: customer.phone || '',
-          email: customer.email || '',
-          motherMaidenName: customer.motherMaidenName || '',
-          maritalStatus: customer.maritalStatus || 'S',
-          uin: customer.uin || '',
-          region: customer.region || '',
-          zone: customer.zone || '',
-          woreda: customer.woreda || '',
-          kebele: customer.kebele || '',
-          houseNumber: customer.houseNumber || '',
-          occupation: customer.occupation || 'O',
-          otherOccupation: customer.otherOccupation || '',
-          industry: customer.industry || 'O',
-          otherIndustry: customer.otherIndustry || '',
-          wealthSource: customer.wealthSource || 'SAL',
-          otherWealthSource: customer.otherWealthSource || '',
-          annualIncome: customer.annualIncome || 0,
-          branchCode: customer.branchCode || flexcubeConfig.defaultBranch,
-          tierId: customer.tierId || '111',
-          accountTypeId: customer.accountTypeId || 'SPRI',
-          promotionType: customer.promotionType || 'Walk in customer',
-          customerSegmentation: customer.customerSegmentation || 'RETAIL CUSTOMER',
-          maker: customer.maker || 'WEB_USER',
-          checker: (approvedBy || 'KYC_OFFICER').toUpperCase().replace(/\s+/g, '_'),
-        }, flexcubeConfig);
+        const result = existingCif
+          ? await createAccountForCIF({
+              cifNumber: existingCif,
+              customerName: customer.existingCifCheck?.fullName || customer.fullName,
+              branchCode: customer.branchCode || flexcubeConfig.defaultBranch,
+              tierId: customer.tierId || '111',
+            }, flexcubeConfig)
+          : await createCustomerAndAccount({
+              fullName: customer.fullName,
+              firstName,
+              middleName,
+              lastName,
+              dateOfBirth: customer.dateOfBirth || '',
+              gender: customer.gender === 'female' ? 'F' : 'M',
+              phone: customer.phone || '',
+              email: customer.email || '',
+              motherMaidenName: customer.motherMaidenName || '',
+              maritalStatus: customer.maritalStatus || 'S',
+              uin: customer.uin || '',
+              region: customer.region || '',
+              zone: customer.zone || '',
+              woreda: customer.woreda || '',
+              kebele: customer.kebele || '',
+              houseNumber: customer.houseNumber || '',
+              occupation: customer.occupation || 'O',
+              otherOccupation: customer.otherOccupation || '',
+              industry: customer.industry || 'O',
+              otherIndustry: customer.otherIndustry || '',
+              wealthSource: customer.wealthSource || 'SAL',
+              otherWealthSource: customer.otherWealthSource || '',
+              annualIncome: customer.annualIncome || 0,
+              branchCode: customer.branchCode || flexcubeConfig.defaultBranch,
+              tierId: customer.tierId || '111',
+              accountTypeId: customer.accountTypeId || 'SPRI',
+              promotionType: customer.promotionType || 'Walk in customer',
+              customerSegmentation: customer.customerSegmentation || 'RETAIL CUSTOMER',
+              maker: customer.maker || 'WEB_USER',
+              checker: (approvedBy || 'KYC_OFFICER').toUpperCase().replace(/\s+/g, '_'),
+            }, flexcubeConfig);
 
         if (result.success) {
           cifNumber = result.cifNumber;
@@ -213,8 +222,8 @@ export async function PATCH(
         // ========== FLEXCUBE DISABLED — FALLBACK LOCAL GENERATION ==========
         console.log(`[FlexCube] DISABLED — using local CIF/Account generation`);
 
-        // Check if customer with same name already exists (reuse CIF)
-        const existingCustomer = await Customer.findOne({
+        // Check if customer with same name already exists (reuse CIF) — existing customers keep their own CIF
+        const existingCustomer = existingCif ? null : await Customer.findOne({
           $or: [
             { fullName: customer.fullName },
             {
@@ -228,7 +237,10 @@ export async function PATCH(
           _id: { $ne: customer._id }
         }).select('cifNumber fullName');
 
-        if (existingCustomer?.cifNumber) {
+        if (existingCif) {
+          cifNumber = existingCif;
+          console.log(`[Local] Existing customer — using CIF ${cifNumber}`);
+        } else if (existingCustomer?.cifNumber) {
           cifNumber = existingCustomer.cifNumber;
           console.log(`[Local] Reusing CIF ${cifNumber} from: ${existingCustomer.fullName}`);
         } else {
@@ -281,7 +293,8 @@ export async function PATCH(
       }
 
       // ========== SAVE CUSTOMER PHOTO TO FLEXCUBE ORACLE DB ==========
-      if (cifNumber && customer.faydaPhoto && flexcubeEnabled) {
+      // Skipped for existing customers — their CIF already carries its photo/signature records
+      if (cifNumber && customer.faydaPhoto && flexcubeEnabled && !existingCif) {
         const FAYDA_BACKEND_URL = process.env.FAYDA_BACKEND_URL || 'http://localhost:5000';
         try {
           const photoRes = await fetch(`${FAYDA_BACKEND_URL}/api/flexcube/save-customer-photo`, {
@@ -501,6 +514,8 @@ export async function PATCH(
         'status', 'approvedBy', 'rejectedBy', 'returnedBy', 'escalatedBy', 'reviewedBy',
         'approvedAt', 'rejectedAt', 'returnedAt', 'escalatedAt', 'reviewedAt',
         'cifNumber', 'accountNumber', 'customerNumber', 'customerId', '_id',
+        // the CIF an existing customer's account is opened under, and its FlexCube check
+        'isExistingCustomer', 'existingCif', 'existingAccountNumber', 'existingCifCheck',
       ];
       for (const k of blocked) delete body[k];
       Object.assign(customer, body);

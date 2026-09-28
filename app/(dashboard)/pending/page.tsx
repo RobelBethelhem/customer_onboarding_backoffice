@@ -226,7 +226,14 @@ export default function PendingReviewPage() {
                         </div>
                         <div>
                           <p className="font-medium text-gray-900">{customer.fullName}</p>
-                          <p className="text-sm text-gray-500">{customer.customerId}</p>
+                          <p className="text-sm text-gray-500">
+                            {customer.customerId}
+                            {customer.isExistingCustomer && (
+                              <span className="ml-2 px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 text-[10px] font-semibold">
+                                Existing CIF {customer.existingCif}
+                              </span>
+                            )}
+                          </p>
                         </div>
                       </div>
                     </td>

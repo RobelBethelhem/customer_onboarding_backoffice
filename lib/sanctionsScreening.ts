@@ -24,7 +24,7 @@ function levenshteinDistance(str1: string, str2: string): number {
   return dp[m][n];
 }
 
-function calculateSimilarity(str1: string, str2: string): number {
+export function calculateSimilarity(str1: string, str2: string): number {
   if (!str1 || !str2) return 0;
   const s1 = str1.toLowerCase().trim();
   const s2 = str2.toLowerCase().trim();

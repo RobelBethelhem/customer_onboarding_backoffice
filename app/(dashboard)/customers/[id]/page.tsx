@@ -7,7 +7,7 @@ import {
   ArrowLeft, User, MapPin, Briefcase, CreditCard, Calendar,
   Phone, Mail, CheckCircle2, XCircle,
   Camera, Eye, AlertTriangle, Download, Printer, Loader2, FileText, Video,
-  Shield, Megaphone, Lock
+  Shield, Megaphone, Lock, UserCheck
 } from 'lucide-react';
 import {
   fetchCustomer, approveCustomer, rejectCustomer, returnCustomer, escalateCustomer, reviewCustomer,
@@ -453,6 +453,12 @@ export default function CustomerDetailPage() {
   // to a Senior Approver (who approves at the escalated 2nd level).
   const isComplianceHold = customer.politicallyExposedPerson === 'YES' || customer.sanctionListStatus === 'Y';
   const kycCanApprove = isKyc && (isPending || isInReview) && !isComplianceHold;
+  // Existing customer: the account is opened under their current CIF. Flag anything that
+  // suggests the CIF may not belong to this applicant.
+  const cifCheck = customer.existingCifCheck;
+  const cifNeedsAttention = !!customer.isExistingCustomer && (
+    !cifCheck?.verified || (cifCheck.nameMatchScore ?? 0) < 80 || cifCheck.phoneMatch === false
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -569,7 +575,7 @@ export default function CustomerDetailPage() {
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      {isEscalated ? 'Approve (2nd Level)' : 'Approve & Create Account'}
+                      {isEscalated ? 'Approve (2nd Level)' : customer.isExistingCustomer ? 'Approve & Open Account on Existing CIF' : 'Approve & Create Account'}
                     </>
                   )}
                 </button>
@@ -606,6 +612,42 @@ export default function CustomerDetailPage() {
                 ? 'Review it, then escalate to a Senior Approver (or reject / return).'
                 : 'A Senior Approver must approve it after escalation.'}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Existing customer — approval opens a new account under the CIF they already have */}
+      {customer.isExistingCustomer && (
+        <div className={`p-4 rounded-xl flex items-start gap-3 border ${cifNeedsAttention ? 'bg-amber-50 border-amber-200' : 'bg-sky-50 border-sky-200'}`}>
+          <UserCheck className={`w-5 h-5 mt-0.5 flex-shrink-0 ${cifNeedsAttention ? 'text-amber-600' : 'text-sky-600'}`} />
+          <div>
+            <p className={`font-medium ${cifNeedsAttention ? 'text-amber-900' : 'text-sky-900'}`}>
+              Existing customer — the account is opened under CIF {customer.existingCif}; no new CIF is created
+            </p>
+            <div className="text-sm text-gray-700 mt-1 space-y-0.5">
+              {customer.existingAccountNumber && (
+                <p>Account number given by the applicant: <span className="font-mono">{customer.existingAccountNumber}</span></p>
+              )}
+              {cifCheck?.verified ? (
+                <>
+                  <p>
+                    Name on CIF: <strong>{cifCheck.fullName || '—'}</strong> · matches the Fayda name{' '}
+                    <strong>{cifCheck.nameMatchScore ?? 0}%</strong>
+                  </p>
+                  <p>
+                    Phone on CIF: {cifCheck.phone || '—'}
+                    {cifCheck.phoneMatch === true && ' · matches the Fayda phone'}
+                    {cifCheck.phoneMatch === false && ' · does not match the Fayda phone'}
+                    {cifCheck.branch && ` · Home branch ${cifCheck.branch}`}
+                  </p>
+                </>
+              ) : (
+                <p>The CIF could not be verified in FlexCube{cifCheck?.message ? ` (${cifCheck.message})` : ''}.</p>
+              )}
+              {cifNeedsAttention && (isPending || isInReview || isEscalated) && (
+                <p className="font-medium text-amber-800">Confirm this CIF belongs to the applicant before approving.</p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1028,6 +1070,17 @@ export default function CustomerDetailPage() {
               </div>
               <InfoItem label="Branch" value={customer.branch} />
               <InfoItem label="Branch Code" value={customer.branchCode} />
+              {customer.isExistingCustomer && (
+                <>
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Existing Customer</p>
+                  </div>
+                  <InfoItem label="Existing CIF" value={customer.existingCif || ''} />
+                  {customer.existingAccountNumber && (
+                    <InfoItem label="Existing Account Number" value={customer.existingAccountNumber} />
+                  )}
+                </>
+              )}
 
               <InfoItem label="Escalated By" value={customer.escalatedBy || ''} />
               <InfoItem label="Approved By" value={customer.approvedBy || ''} />

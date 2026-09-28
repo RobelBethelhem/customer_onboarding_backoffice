@@ -86,6 +86,20 @@ export interface Customer {
   customerType?: string;
   idType?: string;
   nationality?: string;
+  // Existing customer — approval opens a new account under this CIF (no new CIF)
+  isExistingCustomer?: boolean;
+  existingCif?: string;
+  existingAccountNumber?: string;
+  existingCifCheck?: {
+    verified: boolean;
+    fullName?: string;
+    phone?: string;
+    branch?: string;
+    nameMatchScore?: number;
+    phoneMatch?: boolean;
+    message?: string;
+    checkedAt?: string;
+  };
 }
 
 export interface CustomerResponse {

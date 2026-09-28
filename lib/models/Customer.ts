@@ -10,6 +10,18 @@ export interface IVerificationPhotos {
 
 export type CustomerChannel = 'mobile_app' | 'web' | 'whatsapp' | 'telegram' | 'superapp' | 'other';
 
+// FlexCube lookup of the CIF an existing customer gave us, done at submission
+export interface IExistingCifCheck {
+  verified: boolean;         // FlexCube returned the CIF
+  fullName?: string;         // name on the CIF in FlexCube
+  phone?: string;
+  branch?: string;
+  nameMatchScore?: number;   // 0-100 similarity between the CIF name and the Fayda name
+  phoneMatch?: boolean;      // CIF mobile number matches the Fayda phone
+  message?: string;
+  checkedAt?: Date;
+}
+
 export interface ICustomer extends Document {
   customerId: string;
   fullName: string;
@@ -94,6 +106,11 @@ export interface ICustomer extends Document {
   makerTimestamp?: Date;               // When the application was submitted
   // Referral tracking
   referralCode?: string;              // Referral code used by this customer (e.g., REF-0015678)
+  // Existing customer — approval opens a new account under this CIF instead of creating a CIF
+  isExistingCustomer?: boolean;
+  existingCif?: string;               // 7-digit CIF entered by the applicant (or taken from their account number)
+  existingAccountNumber?: string;     // 16-digit account number the applicant entered, if any
+  existingCifCheck?: IExistingCifCheck;
 }
 
 // Default placeholder photo
@@ -105,6 +122,17 @@ const VerificationPhotosSchema = new Schema<IVerificationPhotos>({
   headLeft: { type: String, default: placeholderPhoto },
   headRight: { type: String, default: placeholderPhoto },
   smile: { type: String, default: placeholderPhoto },
+}, { _id: false });
+
+const ExistingCifCheckSchema = new Schema<IExistingCifCheck>({
+  verified: { type: Boolean, default: false },
+  fullName: { type: String },
+  phone: { type: String },
+  branch: { type: String },
+  nameMatchScore: { type: Number },
+  phoneMatch: { type: Boolean },
+  message: { type: String },
+  checkedAt: { type: Date },
 }, { _id: false });
 
 const CustomerSchema = new Schema<ICustomer>({
@@ -205,6 +233,11 @@ const CustomerSchema = new Schema<ICustomer>({
   makerTimestamp: { type: Date },
   // Referral tracking
   referralCode: { type: String, default: '' },
+  // Existing customer (account opened under their current CIF)
+  isExistingCustomer: { type: Boolean, default: false },
+  existingCif: { type: String, default: '' },
+  existingAccountNumber: { type: String, default: '' },
+  existingCifCheck: { type: ExistingCifCheckSchema },
 }, {
   timestamps: true,
 });

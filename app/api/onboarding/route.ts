@@ -7,7 +7,7 @@ import Referral, { migrateReferralIndexes } from '@/lib/models/Referral';
 import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConfig';
 import { distributeReferralRewards } from '@/lib/referralRewards';
 import { sendSMS } from '@/lib/sms';
-import { screenCustomer } from '@/lib/sanctionsScreening';
+import { screenCustomer, calculateSimilarity } from '@/lib/sanctionsScreening';
 
 // Run referral index migration once on first request
 let referralIndexesMigrated = false;
@@ -128,10 +128,70 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
+    // Existing customer: the applicant already has a CIF — given directly, or taken from their
+    // 16-digit account number (BRN(3) + product(3) + CIF(7) + SEQ(3)). On approval only a new
+    // account is opened under that CIF; no new CIF is created.
+    const existingAccountNumber = String(body.existingAccountNumber || '').replace(/\D/g, '');
+    let existingCif = String(body.existingCif || '').replace(/\D/g, '');
+    if (!existingCif && existingAccountNumber.length === 16) {
+      existingCif = existingAccountNumber.substring(6, 13);
+    }
+    const isExistingCustomer = !!(body.existingCustomer || existingCif || existingAccountNumber);
+
+    if (isExistingCustomer) {
+      if (existingAccountNumber && existingAccountNumber.length !== 16) {
+        return NextResponse.json({ success: false, error: 'Account number must be 16 digits' }, { status: 400 });
+      }
+      if (!/^\d{7}$/.test(existingCif)) {
+        return NextResponse.json({
+          success: false,
+          error: 'A 7-digit CIF number or 16-digit account number is required for existing customers',
+        }, { status: 400 });
+      }
+      if (existingAccountNumber && existingAccountNumber.substring(6, 13) !== existingCif) {
+        return NextResponse.json({ success: false, error: 'The CIF number does not match the account number' }, { status: 400 });
+      }
+    }
+
     // Get workflow settings
     let settings = await WorkflowSettings.findById('default');
     if (!settings) {
       settings = await WorkflowSettings.create(defaultWorkflowSettings);
+    }
+
+    // Look the CIF up in FlexCube so the KYC officer can compare it with the Fayda identity.
+    // Not found → reject now so the applicant can correct it. FlexCube unreachable → accept,
+    // flagged as unverified for the KYC officer.
+    let existingCifCheck: Record<string, any> | undefined;
+    if (isExistingCustomer) {
+      if (settings.flexcubeEnabled === false) {
+        existingCifCheck = { verified: false, message: 'FlexCube integration disabled — CIF not verified', checkedAt: new Date() };
+      } else {
+        const lookup = await queryCustomerByCustNo(existingCif, getFlexCubeConfig(settings));
+        if (lookup.success) {
+          const last9 = (p?: string) => String(p || '').replace(/\D/g, '').slice(-9);
+          const cifPhone = last9(lookup.phone);
+          existingCifCheck = {
+            verified: true,
+            fullName: lookup.fullName || '',
+            phone: lookup.phone || '',
+            branch: lookup.branch || '',
+            nameMatchScore: calculateSimilarity(lookup.fullName || '', body.fullName || ''),
+            phoneMatch: cifPhone.length === 9 ? cifPhone === last9(body.phone) : undefined,
+            message: lookup.message,
+            checkedAt: new Date(),
+          };
+        } else if (lookup.connectionError) {
+          existingCifCheck = { verified: false, message: lookup.message, checkedAt: new Date() };
+        } else {
+          console.log(`[Onboarding] Existing CIF ${existingCif} not found in FlexCube: ${lookup.message}`);
+          return NextResponse.json({
+            success: false,
+            error: `We could not find CIF ${existingCif} in our records. Please check the account number or CIF you entered and try again.`,
+          }, { status: 400 });
+        }
+      }
+      console.log(`[Onboarding] Existing customer — CIF ${existingCif}, FlexCube check:`, existingCifCheck);
     }
 
     // UAT: If the applicant is resubmitting a RETURNED/REJECTED application (same Fayda UIN),
@@ -204,6 +264,10 @@ export async function POST(request: Request) {
       workflowDecision = screenHasPEP
         ? 'Sent to manual review: potential PEP match — KYC must escalate to a Senior Approver for approval'
         : 'Sent to manual review: potential sanctions match — KYC must escalate to a Senior Approver for approval';
+    } else if (isExistingCustomer) {
+      // Existing customers never auto-approve: KYC must confirm the CIF belongs to the applicant.
+      status = 'pending';
+      workflowDecision = `Sent to manual review: existing customer (CIF ${existingCif}) — KYC must confirm the CIF belongs to the applicant before the account is opened`;
     } else if (!isMobileApp) {
       // NON-MOBILE CHANNELS: Always manual review regardless of workflow settings
       status = 'pending';
@@ -311,6 +375,11 @@ export async function POST(request: Request) {
       makerTimestamp: new Date(),
       // Referral tracking
       referralCode: body.referralCode || '',
+      // Existing customer — approval opens only a new account under this CIF
+      isExistingCustomer,
+      existingCif: isExistingCustomer ? existingCif : '',
+      existingAccountNumber: isExistingCustomer ? existingAccountNumber : '',
+      existingCifCheck,
       // Marriage certificate photo (only for married customers)
       marriageCertificatePhoto: body.marriageCertificatePhoto,
       // Photos - Fayda ID photo and selfie
