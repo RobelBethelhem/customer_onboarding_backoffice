@@ -1,0 +1,36 @@
+{
+  "name": "customer-onboarding-admin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3500 -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start -p 3500",
+    "lint": "next lint",
+    "seed": "npx tsx scripts/seed-admin.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "date-fns": "^3.3.1",
+    "jose": "^6.2.0",
+    "lucide-react": "^0.344.0",
+    "mongoose": "^9.1.4",
+    "next": "14.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.15.4",
+    "sonner": "^2.0.7",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.0"
+  }
+}

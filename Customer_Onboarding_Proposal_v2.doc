@@ -1,0 +1,521 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                  Proposal for the Implementing Customer Onboarding
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                      January 9, 2026
+
+
+
+
+
+
+
+
+Contents
+
+EXECUTIVE SUMMARY	1
+INTRODUCTION	2
+CURRENT STATE ANALYSIS	3
+OBJECTIVES	6
+PROPOSED CUSTOMER ONBOARDING SOLUTION	6
+TARGET ARCHITECTURE	6
+KEY COMPONENTS	7
+FEATURE COMPARISON	7
+IMPLEMENTATION STRATEGY	8
+Phased Approach	8
+Implementation Patterns	9
+Technical Implementation Mapping	9
+INFRASTRUCTURE REQUIREMENTS	10
+COMPLIANCE AND SECURITY	10
+RECOMMENDATION	11
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Acronyms
+
+KYC: Know Your Customer
+eKYC: Electronic Know Your Customer
+OCR: Optical Character Recognition
+NFC: Near Field Communication
+API: Application Programming Interface
+SDK: Software Development Kit
+OTP: One-Time Password
+2FA: Two-Factor Authentication
+AML: Anti-Money Laundering
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Executive Summary
+
+In today's rapidly evolving technological landscape, banks are increasingly pressured to deliver seamless digital experiences, with customer onboarding playing a vital role in this transformation. To acquire and retain customers effectively, banks must adopt innovative technological solutions designed for frictionless onboarding, enabling efficient identity verification and enhancing the customer experience. Third-party providers, such as eKYC vendors, biometric service providers, and compliance platforms, are essential partners in this digital transformation. A critical enabler of modern onboarding is the mobile application, which serves as the foundational touchpoint for customer acquisition, promoting accessibility and convenience. Therefore, a robust digital onboarding strategy is essential, incorporating a well-defined implementation roadmap aligned with the overall digital transformation strategy.
+
+Zemen Bank is dedicated to serving its valued customers through various digital channels. To provide seamless account opening services and ensure regulatory compliance, the bank requires a comprehensive Customer Onboarding Solution. However, the bank does not currently have a digital onboarding platform, which limits its ability to acquire customers efficiently. While the current branch-based process has strengths, such as personal interaction and document verification, the existing approach is outdated, and the bank's operational capacity is constrained. These limitations hinder the bank's ability to scale customer acquisition and respond to market demands efficiently; resulting in lengthy onboarding times due to manual processes, particularly affecting customer satisfaction and conversion rates.
+
+As part of a new corporate strategy focused on enhancing IT and digital capabilities, it is crucial for Zemen Bank to review its current onboarding process and the challenges it faces, with a goal of proposing a suitable digital onboarding solution that aligns with the bank's growth objectives.
+
+Key Drivers:
+85% reduction in onboarding time
+Modern mobile-first architecture support
+Improved customer conversion rates
+Future-proof digital banking platform
+Cost Savings (Significant operational cost reduction through digital automation)
+
+
+
+
+
+
+
+
+
+
+
+
+
+Introduction
+
+Zemen Bank aspires to be recognized as "Become a home of distinctive financial solutions and service excellence." Achieving this vision necessitates a thorough evaluation of our infrastructure and setup, particularly with respect to critical components such as the Customer Onboarding platform and identity verification systems. These elements are essential in driving operational excellence and enhancing business agility, allowing us to respond swiftly to shifts within the industry.
+
+Given the increasing focus on digital banking and the rising demand for seamless customer experiences, the IT department requires an onboarding solution that is both scalable and highly flexible. As customer expectations and regulatory requirements grow more complex, an effective digital onboarding platform is vital to streamline customer acquisition by serving as a central touchpoint for account opening.
+
+Previously, Zemen Bank's technical team has implemented onboarding processes based on business requirements; however, they face several significant challenges. The lack of a digital onboarding platform has resulted in limited efficiency and control over customer acquisition, exposing the bank to potential competitive disadvantages. Additionally, the difficulty in manual verification has led to a long time to activation for new accounts, further hampering agility. New customers also struggle to navigate the onboarding process, as the existing procedures are not user-friendly and present a steep learning curve.
+
+Moreover, the current verification framework only supports manual document checks, which is inadequate given the bank's needs. To enhance efficiency, it is recommended that the bank adopt a more advanced verification method, such as automated eKYC with biometric authentication, as part of a centralized digital onboarding implementation. Addressing these challenges is crucial, as doing so will improve overall customer experience, facilitate faster account activation, and enhance the bank's operational efficiency.
+
+As Zemen Bank considers whether to enhance its existing processes or invest in training on current systems while still incurring substantial operational costs and long processing times, there is a compelling alternative: adopting a digital onboarding solution, which can effectively meet the bank's objectives. The rationale for this shift includes several key advantages:
+
+No Branch Visit Required: Digital solutions enable fully remote account opening.
+Cost-Effective Implementation: The expense of implementation and ongoing maintenance yields substantial ROI.
+Long-Term Savings: Leveraging a flexible and customizable solution will yield significant cost savings as business needs evolve.
+Enhanced Security and Privacy: Digital onboarding ensures all data is encrypted during transit and stored securely, minimizing fraud risk.
+Improved Performance: Designed for speed and responsiveness, digital onboarding enhances the overall customer experience.
+
+In conclusion, considering the advantages of digital onboarding, establishing a reliable, secure, and controllable environment for customer acquisition is critical for Zemen Bank. This will empower the bank to onboard customers effectively, providing a centralized platform for all onboarding needs and facilitating visibility for operations teams. Moreover, it will enable the quick onboarding of new customers with agility, along with a plan for extended scalability.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Current State Analysis
+
+Zemen Bank is currently facing significant challenges due to the absence of a centralized Digital Onboarding Platform. This deficiency is resulting in limited efficiency and control over customer acquisition, exposing the bank to potential competitive disadvantages. Furthermore, the lack of a streamlined digital process is contributing to prolonged time-to-activation for new accounts, thereby inhibiting the bank's ability to respond swiftly to market demands. New customers encounter difficulties in completing the onboarding process, which is not user-friendly and creates barriers to effective conversion. Lastly, the bank's reliance on manual verification methods undermines operational efficiency, necessitating a transition to automated eKYC solutions. Addressing these challenges is essential for improving customer acquisition, enhancing operational efficiency, and ensuring the overall competitiveness of Zemen Bank in the digital banking landscape.
+
+1.1 Existing Onboarding Process Environment
+
+Process: Manual Branch-Based Onboarding
+Components in Use:
+Physical Document Collection
+Manual Data Entry
+In-Person Verification
+Paper-Based Forms
+Manual Compliance Checks
+
+Deployment: Branch Network
+Verification Methods: Manual document review, physical presence
+Current Load: 500+ applications/month, 3-5 days processing time
+
+1.2 Challenges with Current Process
+
+High Total Cost of Operations
+Staff hours per application: 2-3 hours
+Document handling and storage costs
+Branch infrastructure overhead
+
+Process Limitations
+Complex manual procedures
+Lengthy verification cycles
+Limited accessibility for remote customers
+
+Operational Challenges
+High error rate in manual data entry
+Inconsistent verification procedures
+Extended processing times
+Customer drop-off rate: 40%
+
+
+
+Objectives
+
+If the bank intends to implement a Digital Customer Onboarding Solution, the desired goals and objectives are:
+
+Minimize or reduce time and cost for customer acquisition in each onboarding cycle
+Reduce complexity with automated identity verification
+Implement compliance checks more effectively
+Significant improvement in customer conversion rates
+Highly customizable and can be easily integrated with other systems and technologies
+Has robust security features that ensure regulatory compliance and fraud prevention
+Enhancement for security by implementing biometric authentication
+Enhancement for efficiency by implementing automated eKYC
+
+With the objectives aligned, we can look into the proposed Customer Onboarding Solution and evaluate two strategic implementation approaches.
+
+
+
+Proposed Customer Onboarding Solution
+
+APPROACH 1: DEDICATED MOBILE APPLICATION (RECOMMENDED)
+
+A purpose-built, standalone mobile application exclusively designed for customer onboarding, offering maximum customization, optimal user experience, and full control over the onboarding journey.
+
+APPROACH 2: INTEGRATION WITH EXISTING MOBILE BANKING APP
+
+Embedding onboarding functionality within the existing mobile banking application, leveraging current infrastructure while adding new onboarding capabilities.
+
+
+
+Target Architecture
+
+APPROACH 1: DEDICATED MOBILE APPLICATION (RECOMMENDED)
+┌───────────────────────────────────────────────────────────────────┐
+│                    Dedicated Onboarding Platform                  │
+├───────────────────────────────────────────────────────────────────┤
+│ Onboarding   │ Identity     │ Compliance   │ Integration         │
+│ App          │ Verification │ Engine       │ Services            │
+│ (Mobile)     │ (eKYC/Bio)   │ (KYC/AML)    │ (Core Banking)      │
+├───────────────────────────────────────────────────────────────────┤
+│                    API Gateway & Orchestration                    │
+│                    (WSO2 API Manager/ESB)    (Oracle SOA)                     │
+└───────────────────────────────────────────────────────────────────┘
+
+Advantages:
+- Optimal user experience with focused journey
+- 25% higher conversion rates (industry benchmark)
+- Lightweight app (~25MB) with better device compatibility
+- Independent release cycles for rapid iteration
+- Security isolation with dedicated controls
+- Maximum flexibility for customization
+
+
+APPROACH 2: INTEGRATION WITH EXISTING APP
+┌───────────────────────────────────────────────────────────────────┐
+│                    Existing Mobile Banking App                    │
+├───────────────────────────────────────────────────────────────────┤
+│ Banking      │ NEW:         │ Compliance   │ Shared              │
+│ Features     │ Onboarding   │ Engine       │ Infrastructure      │
+│ (Existing)   │ Module       │ (KYC/AML)    │ (Auth/Network)      │
+├───────────────────────────────────────────────────────────────────┤
+│                    Existing API Layer                             │
+│                    (Enhanced with Onboarding APIs)                │
+└───────────────────────────────────────────────────────────────────┘
+
+Considerations:
+- Larger app download size (100MB+)
+- Shared release cycles with coordination overhead
+- Higher cognitive load for new users
+- Lower conversion rates compared to dedicated app
+- Seamless post-onboarding transition
+
+
+
+Key Components
+
+Digital Onboarding Application
+Native iOS and Android applications
+Intuitive user interface optimized for onboarding
+Offline capability for document capture
+Multi-language support
+
+Identity Verification Module
+National ID/Passport OCR extraction
+Face recognition with liveness detection
+NFC chip reading for smart IDs
+Government database validation
+
+Compliance Engine
+Real-time AML/Sanctions screening
+PEP checking and risk scoring
+Regulatory reporting automation
+Complete audit trail management
+
+Integration Services
+Core banking system integration
+WSO2 ESB/API Manager connectivity
+SMS/Email notification services
+Document management system
+
+
+
+
+
+
+Feature Comparison
+
+Capability			Approach 1: Dedicated App	Approach 2: Existing App	Advantage
+				(RECOMMENDED)
+App Download Size		~25MB				100MB+				87% smaller
+User Experience			Optimal, Focused		Adequate, Shared		Better conversion
+Conversion Rate			25% Higher			Standard			Significant uplift
+Release Flexibility		Independent			Coordinated			Faster iteration
+Performance			Optimized			Adequate			Better responsiveness
+Device Compatibility		Wider (older devices)		Limited				Broader reach
+Security Isolation		Full separation			Shared perimeter		Better security
+Development Speed		Fast				Moderate			Quicker delivery
+Customization			Maximum				Limited				More flexibility
+Time to Market			32 Weeks			36 Weeks			4 weeks faster
+
+
+
+Implementation Strategy
+
+Phased Approach
+
+Phase 1: Foundation (Weeks 1-3)
+├── Environment setup
+├── Proof of Concept
+├── Team training
+├── DevOps pipeline
+
+Phase 2: Core Development (Weeks 4-5)
+├── Mobile application development
+├── Identity verification integration
+├── Backend services development
+├── Core banking integration
+
+Phase 3: Testing & Compliance (Weeks 6-7)
+├── Security testing and audit
+├── Compliance validation
+├── User acceptance testing
+├── Performance optimization
+
+Phase 4: Launch & Optimization (Weeks 7-8)
+├── Pilot launch with controlled rollout
+├── Monitoring and feedback collection
+├── Performance tuning
+├── Full production release
+
+
+Implementation Patterns
+
+Direct Implementation
+(Standard Onboarding)
+Document Capture → OCR Extraction → Data Validation
+
+Biometric Verification
+(Identity Confirmation)
+Face Capture → Liveness Detection → ID Matching
+
+Compliance Integration
+(Regulatory Checks)
+Customer Data → AML Screening → Risk Assessment
+
+
+Technical Implementation Mapping
+
+Current Process			Digital Solution			Implementation Approach
+Physical Document Collection	Mobile Document Capture			OCR with quality validation
+Manual Data Entry		Automated Data Extraction		AI-powered form filling
+In-Person Verification		Biometric Authentication		Face recognition with liveness
+Paper-Based Forms		Digital Application Forms		Mobile-native UI components
+Manual Compliance Checks	Automated AML/KYC Screening		Real-time API integration
+Branch-Based Processing		Remote Digital Processing		Cloud-native architecture
+
+
+
+Infrastructure Requirements
+
+Hardware: 4 vCPU, 16GB RAM, 200GB storage per node (2-node cluster minimum)
+Software: Docker, Kubernetes, JDK 11, PostgreSQL
+Network: Load balancer, WAF, SSL certificates, VPN to core banking
+Storage: Object storage for documents with encryption at rest
+Third-Party: eKYC provider, biometric service, AML screening provider
+
+
+
+Compliance and Security
+
+Standards: REST APIs, OAuth2, OpenID Connect, JSON/XML
+Security: Biometric authentication, JWT tokens, mTLS, end-to-end encryption
+Compliance: NBE KYC requirements, AML regulations, Data Protection laws
+Auditing: Complete audit trail for all onboarding transactions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Recommendation
+
+As aforementioned, we tried to explicitly elaborate and set the recommendation for the Bank to decide on the path to move towards by having the mission and vision of the Bank into consideration.
+
+We strongly recommend APPROACH 1: DEDICATED MOBILE APPLICATION for the following reasons:
+
+Superior User Experience: The dedicated app provides a focused, distraction-free onboarding journey that achieves 25% higher conversion rates compared to embedded solutions.
+
+Optimal Performance: With a lightweight footprint (~25MB vs 100MB+), the dedicated app works efficiently on older devices and low-bandwidth conditions, expanding the addressable customer base.
+
+Maximum Flexibility: Independent release cycles enable rapid iteration, A/B testing, and market-specific customizations without impacting core banking operations.
+
+Security Isolation: A separate application provides dedicated security controls and reduces the attack surface for sensitive onboarding data.
+
+Faster Time to Market: The dedicated app can be deployed in 32 weeks versus 36 weeks for the integration approach.
+
+If the recommendation is to use a Dedicated Mobile Application, it provides a customer-centric and flexible solution for acquiring and onboarding new customers efficiently. With its focused user experience and independent architecture, the dedicated app can support the bank's growth and competitiveness in the digital banking landscape. Therefore, we recommend for the Bank to implement APPROACH 1: DEDICATED MOBILE APPLICATION and considering the advantage of having a reliable, secure, and controllable environment for customer onboarding.
+
+Overall, our recommendations are as follows:
+
+Bank shall implement DEDICATED MOBILE APPLICATION for Customer Onboarding
+The bank shall engage implementer for standardized and effective implementation and adoption
+Bank shall choose deployment approach of type, cloud-native with on-premises core banking integration
+Bank shall setup center of excellence, Digital Onboarding Team
+Bank shall align/setup training for Digital Onboarding Team
+Bank shall initiate technical discussion with eKYC and biometric service providers
+Bank shall integrate with WSO2 ESB and API Manager for backend services

@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: #f8fafc;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Dashboard card hover effect */
+.dashboard-card {
+  @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6 transition-all duration-200;
+}
+
+.dashboard-card:hover {
+  @apply shadow-md border-gray-200;
+}
+
+/* Status badges */
+.badge {
+  @apply px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-success {
+  @apply bg-green-100 text-green-800;
+}
+
+.badge-warning {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.badge-error {
+  @apply bg-red-100 text-red-800;
+}
+
+.badge-info {
+  @apply bg-blue-100 text-blue-800;
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white;
+  }
+
+  /* Hide sidebar and non-essential elements */
+  aside,
+  nav,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Show only the main content */
+  main {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Optimize page breaks */
+  .page-break-avoid {
+    page-break-inside: avoid;
+  }
+
+  /* Remove shadows and borders */
+  .shadow,
+  .shadow-sm,
+  .shadow-md,
+  .shadow-lg {
+    box-shadow: none !important;
+  }
+
+  /* Make text black for printing */
+  * {
+    color: black !important;
+  }
+
+  /* Keep background colors for badges */
+  .badge,
+  .bg-green-100,
+  .bg-blue-100,
+  .bg-red-100,
+  .bg-amber-100 {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
