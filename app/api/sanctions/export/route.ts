@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import SanctionEntry from '@/lib/models/SanctionEntry';
 import AuditLog from '@/lib/models/AuditLog';
+import { auditContext } from '@/lib/audit';
 
 // Generate unique audit ID
 function generateAuditId(): string {
@@ -19,7 +20,8 @@ export async function GET(request: Request) {
     const sanctionType = searchParams.get('type') || '';
     const sourceId = searchParams.get('source') || '';
     const status = searchParams.get('status') || 'ACTIVE';
-    const exportedBy = searchParams.get('exportedBy') || 'SYSTEM';
+    // The signed-in user, not a client-supplied parameter
+    const exportedBy = request.headers.get('x-user-name') || request.headers.get('x-user-email') || 'SYSTEM';
 
     // Build query
     const query: any = { isDeleted: false };
@@ -59,6 +61,7 @@ export async function GET(request: Request) {
 
     // Create audit log
     await AuditLog.create({
+      ...auditContext(request), // who (id, name, email, role), IP and browser
       auditId: generateAuditId(),
       module: 'SANCTIONS',
       action: 'EXPORT',

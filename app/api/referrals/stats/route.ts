@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Referral from '@/lib/models/Referral';
-import RewardTransaction from '@/lib/models/RewardTransaction';
+import RewardTransaction from '@/lib/models/RewardTransaction';
+
+// Always run on request: otherwise `next build` pre-renders this route, which freezes its data
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/referrals/stats

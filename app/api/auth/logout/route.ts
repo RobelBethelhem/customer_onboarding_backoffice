@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/lib/models/User';
+import { audit } from '@/lib/audit';
 
 export async function POST(request: NextRequest) {
   // F2: invalidate all tokens issued to this user by bumping their tokenVersion server-side
@@ -12,6 +13,10 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.error('[Auth] Logout tokenVersion bump failed:', e);
     }
+    await audit(request, {
+      module: 'AUTH', action: 'LOGOUT', entityType: 'User', entityId: userId,
+      entityName: request.headers.get('x-user-email') || '', description: 'Signed out',
+    });
   }
 
   const response = NextResponse.json({ success: true });

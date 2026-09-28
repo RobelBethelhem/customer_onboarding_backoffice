@@ -19,6 +19,7 @@ import {
   Gift,
   Users,
   Smartphone,
+  History,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth, UserRole } from './AuthProvider';
@@ -46,6 +47,7 @@ const menuItems: MenuItem[] = [
   { name: 'Referral Program', href: '/referrals', icon: Gift, roles: ['admin', 'marketing'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin', 'kyc', 'marketing'] },
   { name: 'User Management', href: '/users', icon: Users, roles: ['admin'] },
+  { name: 'Audit Log', href: '/audit-logs', icon: History, roles: ['admin'] },
 ];
 
 export default function Sidebar() {

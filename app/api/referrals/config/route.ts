@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConfig';
+import { audit, fieldChanges } from '@/lib/audit';
+
+// Always run on request: otherwise `next build` pre-renders this route, which freezes its data and makes saving (PUT) fail with 405
+export const dynamic = 'force-dynamic';
 
 // F5: referral links may only point to trusted Zemen Bank domains (anti open-redirect/phishing)
 function isTrustedBaseUrl(value: string): boolean {
@@ -122,6 +126,8 @@ export async function PUT(request: NextRequest) {
     // F9: updatedBy from the authenticated session, not the client payload
     update.updatedBy = request.headers.get('x-user-name') || request.headers.get('x-user-email') || 'admin';
 
+    const before = (await ReferralConfig.findById('default').lean()) || {};
+
     // Upsert config
     const config = await ReferralConfig.findByIdAndUpdate(
       'default',
@@ -130,6 +136,15 @@ export async function PUT(request: NextRequest) {
     );
 
     console.log(`[Referral Config] Updated by ${update.updatedBy}:`, JSON.stringify(update, null, 2));
+
+    const changes = fieldChanges(before, config?.toObject() || {}, Object.keys(update).filter(k => k !== 'updatedBy'));
+    if (changes.length) {
+      await audit(request, {
+        module: 'REFERRAL', action: 'UPDATE', entityType: 'ReferralConfig', entityId: 'default',
+        entityName: 'Referral programme settings', changes,
+        description: `Changed ${changes.map(c => c.field).join(', ')}`,
+      });
+    }
 
     return NextResponse.json({
       success: true,

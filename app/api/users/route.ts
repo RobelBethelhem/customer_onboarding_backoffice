@@ -111,6 +111,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { requireRole } from '@/lib/apiAuth';
+import { audit } from '@/lib/audit';
 
 // Roles tied to one branch — they must be given a branch code
 const BRANCH_ROLES = ['branch', 'personal_banker'];
@@ -270,6 +271,11 @@ export async function POST(request: NextRequest) {
       role,
       branchCode: BRANCH_ROLES.includes(role) ? branchCode : '',
       isActive: true,
+    });
+
+    await audit(request, {
+      module: 'USER', action: 'CREATE', entityType: 'User', entityId: String(user._id), entityName: user.email,
+      description: `Created ${role} user ${user.name}${user.branchCode ? ` (branch ${user.branchCode})` : ''}`,
     });
 
     /*

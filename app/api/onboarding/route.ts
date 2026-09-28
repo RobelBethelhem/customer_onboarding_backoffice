@@ -9,6 +9,7 @@ import { distributeReferralRewards } from '@/lib/referralRewards';
 import { sendSMS } from '@/lib/sms';
 import { screenCustomer, calculateSimilarity } from '@/lib/sanctionsScreening';
 import { normalizeServices, servicesInProgressSmsLine } from '@/lib/services';
+import { audit, SYSTEM_ACTOR } from '@/lib/audit';
 
 // Run referral index migration once on first request
 let referralIndexesMigrated = false;
@@ -539,6 +540,20 @@ export async function POST(request: Request) {
       console.log(`[Resubmit] Amended existing application ${customerId} (resubmission #${existingApp.resubmissionCount})`);
     } else {
       customer = await Customer.create(customerData);
+    }
+
+    // Audit trail: the applicant's submission and, if it happened, the system's auto-approval
+    const applicationTarget = { entityType: 'Customer', entityId: customer.customerId, entityName: customer.fullName };
+    await audit(request, {
+      module: 'APPLICATION', action: 'SUBMIT', ...applicationTarget,
+      description: `${existingApp ? `Resubmitted (#${customer.resubmissionCount})` : 'Submitted'} via ${channel} — ${workflowDecision}`,
+      actor: { performedBy: 'Applicant', performedByName: customer.fullName, performedByRole: 'applicant' },
+    });
+    if (status === 'auto_approved') {
+      await audit(request, {
+        module: 'APPLICATION', action: 'AUTO_APPROVE', ...applicationTarget, actor: SYSTEM_ACTOR,
+        description: workflowDecision,
+      });
     }
 
     // ========== SMS: APPLICATION SUBMITTED (status-aware + Application ID for tracking) ==========

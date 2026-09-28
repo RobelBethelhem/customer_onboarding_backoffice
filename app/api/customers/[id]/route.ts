@@ -8,6 +8,9 @@ import Referral from '@/lib/models/Referral';
 import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConfig';
 import { sendSMS } from '@/lib/sms';
 import { servicesInProgressSmsLine } from '@/lib/services';
+import { audit, fieldChanges, AuditEvent } from '@/lib/audit';
+import type { AuditAction, AuditStatus } from '@/lib/auditTypes';
+import type { IFieldChange } from '@/lib/models/AuditLog';
 
 /**
  * Build FlexCube config from workflow settings
@@ -38,6 +41,11 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    await audit(request, {
+      module: 'CUSTOMER', action: 'VIEW', entityType: 'Customer',
+      entityId: params.id, entityName: (customer as any).fullName, description: 'Viewed application details',
+    });
 
     return NextResponse.json({
       success: true,
@@ -78,6 +86,25 @@ export async function PATCH(
       );
     }
 
+    // Audit: the decision taken on this application — or refused, logged as DENIED
+    const auditAction: AuditAction =
+      action === 'approve' || action === 'auto_approve' ? 'APPROVE'
+      : action === 'reject' ? 'REJECT'
+      : action === 'review' ? 'REVIEW'
+      : action === 'return' ? 'RETURN'
+      : action === 'escalate' ? 'ESCALATE'
+      : 'UPDATE';
+    const logDecision = (description: string, status: AuditStatus = 'SUCCESS', extra: Partial<AuditEvent> = {}) =>
+      audit(request, {
+        module: 'CUSTOMER', action: auditAction, status, entityType: 'Customer',
+        entityId: customer.customerId, entityName: customer.fullName, description, ...extra,
+      });
+    const refuse = async (error: string, httpStatus: number) => {
+      await logDecision(`Refused: ${error}`, 'DENIED');
+      return NextResponse.json({ success: false, error }, { status: httpStatus });
+    };
+    let generalChanges: IFieldChange[] = [];
+
     // F8: Separation of duties — only KYC officers (first level) and Senior Approvers
     // (escalated/PEP second level) may action onboarding decisions. Admin is restricted to
     // system management and cannot approve/reject/return/escalate customer applications.
@@ -86,20 +113,17 @@ export async function PATCH(
       const isEscalatedDecision = customer.status === 'escalated' && (action === 'approve' || action === 'reject');
       if (isEscalatedDecision) {
         if (role !== 'senior_approver') {
-          return NextResponse.json({ success: false, error: 'Only a Senior Approver can action escalated (PEP) applications' }, { status: 403 });
+          return refuse('Only a Senior Approver can action escalated (PEP) applications', 403);
         }
       } else if (role !== 'kyc') {
-        return NextResponse.json({ success: false, error: 'Only a KYC officer can perform this action' }, { status: 403 });
+        return refuse('Only a KYC officer can perform this action', 403);
       }
 
       // Idempotency guard — a request that already reached a terminal outcome cannot be
       // actioned again. This is the authoritative defence against two officers approving the
       // same application (and creating a duplicate FlexCube account) at nearly the same time.
       if (['approved', 'auto_approved', 'rejected'].includes(customer.status)) {
-        return NextResponse.json(
-          { success: false, error: 'This application has already been processed and can no longer be changed.' },
-          { status: 409 }
-        );
+        return refuse('This application has already been processed and can no longer be changed.', 409);
       }
 
       // Concurrency guard — if another officer is actively holding the review lock, reject
@@ -109,10 +133,7 @@ export async function PATCH(
       const lockFresh =
         !!customer.lockedAt && Date.now() - new Date(customer.lockedAt).getTime() < LOCK_TTL_MS;
       if (lockFresh && customer.lockedById && customer.lockedById !== myId) {
-        return NextResponse.json(
-          { success: false, error: `This application is currently being reviewed by ${customer.lockedBy || 'another officer'}.` },
-          { status: 423 }
-        );
+        return refuse(`This application is currently being reviewed by ${customer.lockedBy || 'another officer'}.`, 423);
       }
     }
 
@@ -123,10 +144,7 @@ export async function PATCH(
     if ((action === 'approve' || action === 'auto_approve') && role === 'kyc') {
       const complianceHold = customer.politicallyExposedPerson === 'YES' || customer.sanctionListStatus === 'Y';
       if (complianceHold) {
-        return NextResponse.json(
-          { success: false, error: 'PEP / sanctions applications cannot be approved by a KYC officer. Please escalate to a Senior Approver.' },
-          { status: 403 }
-        );
+        return refuse('PEP / sanctions applications cannot be approved by a KYC officer. Please escalate to a Senior Approver.', 403);
       }
     }
 
@@ -213,6 +231,7 @@ export async function PATCH(
             await customer.save();
           }
 
+          await logDecision(`FlexCube failed: ${result.message}`, 'FAILURE', { action: 'APPROVE_FAILED' });
           return NextResponse.json({
             success: false,
             error: `FlexCube integration failed: ${result.message}`,
@@ -523,6 +542,7 @@ export async function PATCH(
         'requestedServices', 'servicesStatus', 'completedServices', 'serviceNotifications',
       ];
       for (const k of blocked) delete body[k];
+      generalChanges = fieldChanges(customer.toObject(), body, Object.keys(body).filter(k => k !== 'action'));
       Object.assign(customer, body);
     }
 
@@ -535,6 +555,18 @@ export async function PATCH(
     }
 
     await customer.save();
+
+    await logDecision(
+      auditAction === 'APPROVE'
+        ? `Approved — CIF ${customer.cifNumber}, account ${customer.accountNumber}${customer.isExistingCustomer ? ' (existing CIF, account only)' : ''}`
+        : auditAction === 'REJECT' ? `Rejected: ${customer.rejectionReason}`
+        : auditAction === 'REVIEW' ? 'Started review'
+        : auditAction === 'RETURN' ? `Returned to applicant: ${customer.returnReason}`
+        : auditAction === 'ESCALATE' ? `Escalated to a Senior Approver: ${customer.escalationReason}`
+        : `Updated ${generalChanges.map(c => c.field).join(', ') || 'no fields'}`,
+      'SUCCESS',
+      auditAction === 'UPDATE' ? { changes: generalChanges } : {}
+    );
 
     return NextResponse.json({
       success: true,
@@ -564,6 +596,12 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    await audit(request, {
+      module: 'CUSTOMER', action: 'DELETE', entityType: 'Customer',
+      entityId: params.id, entityName: customer.fullName,
+      description: `Deleted application ${params.id} (status was ${customer.status})`,
+    });
 
     return NextResponse.json({
       success: true,

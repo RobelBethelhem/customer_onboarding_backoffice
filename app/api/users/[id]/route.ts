@@ -3,6 +3,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { requireRole } from '@/lib/apiAuth';
+import { audit, fieldChanges } from '@/lib/audit';
 
 // PATCH /api/users/[id] - Update user (admin only)
 export async function PATCH(
@@ -23,6 +24,7 @@ export async function PATCH(
     if (!user) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
+    const before = { name: user.name, phone: user.phone, role: user.role, branchCode: user.branchCode, isActive: user.isActive, isLocked: user.isLocked };
 
     if (name) user.name = name;
     if (typeof phone === 'string') user.phone = phone;
@@ -52,6 +54,22 @@ export async function PATCH(
     }
 
     await user.save();
+
+    // Audit each kind of change separately so it can be filtered by action type
+    const target = { module: 'USER' as const, entityType: 'User', entityId: String(user._id), entityName: user.email };
+    const changes = fieldChanges(before, user.toObject(), ['name', 'phone', 'role', 'branchCode']);
+    if (changes.length) {
+      await audit(request, { ...target, action: 'UPDATE', changes, description: `Changed ${changes.map(c => c.field).join(', ')}` });
+    }
+    if (before.isActive !== user.isActive) {
+      await audit(request, { ...target, action: user.isActive ? 'ACTIVATE' : 'DEACTIVATE', description: user.isActive ? 'Activated user' : 'Deactivated user' });
+    }
+    if (before.isLocked !== user.isLocked) {
+      await audit(request, { ...target, action: user.isLocked ? 'LOCK' : 'UNLOCK', description: user.isLocked ? 'Locked user' : 'Unlocked user' });
+    }
+    if (password) {
+      await audit(request, { ...target, action: 'PASSWORD_RESET', description: 'Reset the password' });
+    }
 
     return NextResponse.json({
       success: true,
@@ -91,6 +109,10 @@ export async function DELETE(
 
     user.isActive = false;
     await user.save();
+    await audit(request, {
+      module: 'USER', action: 'DEACTIVATE', entityType: 'User', entityId: String(user._id),
+      entityName: user.email, description: 'Deactivated user (delete)',
+    });
 
     return NextResponse.json({ success: true, message: 'User deactivated' });
   } catch (error: any) {

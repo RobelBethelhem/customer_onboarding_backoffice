@@ -94,6 +94,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import { comparePassword, hashPassword, generateOtp, hashOtp } from '@/lib/auth';
 import { sendSMS } from '@/lib/sms';
+import { audit, userActor } from '@/lib/audit';
 
 const MAX_ATTEMPTS = 3;          // F4: lock after 3 failed attempts (password OR OTP)
 const OTP_TTL_MS = 5 * 60 * 1000;
@@ -150,13 +151,30 @@ export async function POST(request: Request) {
     });
 
     if (!user) {
+      await audit(request, {
+        module: 'AUTH', action: 'LOGIN_FAILED', status: 'FAILURE',
+        entityType: 'User', entityId: normalizedEmail, entityName: normalizedEmail,
+        description: 'Sign-in failed: no user with this email',
+        actor: { performedBy: normalizedEmail, performedByEmail: normalizedEmail },
+      });
       return NextResponse.json(
         { success: false, error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
+    const loginAudit = (
+      action: 'LOGIN_FAILED' | 'ACCOUNT_LOCKED' | 'LOGIN_OTP_SENT',
+      status: 'SUCCESS' | 'FAILURE' | 'DENIED',
+      description: string
+    ) => audit(request, {
+      module: 'AUTH', action, status, description,
+      entityType: 'User', entityId: String(user._id), entityName: user.email,
+      actor: userActor(user),
+    });
+
     if (user.isLocked) {
+      await loginAudit('LOGIN_FAILED', 'DENIED', 'Sign-in refused: account is locked');
       return NextResponse.json(
         {
           success: false,
@@ -168,6 +186,7 @@ export async function POST(request: Request) {
     }
 
     if (!user.isActive) {
+      await loginAudit('LOGIN_FAILED', 'DENIED', 'Sign-in refused: account is inactive');
       return NextResponse.json(
         {
           success: false,
@@ -198,6 +217,10 @@ export async function POST(request: Request) {
       }
 
       await user.save();
+
+      await (locked
+        ? loginAudit('ACCOUNT_LOCKED', 'FAILURE', `Wrong password — account locked after ${MAX_ATTEMPTS} failed attempts`)
+        : loginAudit('LOGIN_FAILED', 'FAILURE', `Wrong password (failed attempt ${user.failedLoginAttempts} of ${MAX_ATTEMPTS})`));
 
       return NextResponse.json(
         {
@@ -240,6 +263,10 @@ export async function POST(request: Request) {
         `[Auth][DEV] Login OTP for ${user.email}: ${otp}`
       );
     }
+
+    await loginAudit('LOGIN_OTP_SENT', 'SUCCESS', user.phone
+      ? 'Password accepted — sign-in code sent by SMS'
+      : 'Password accepted — no phone on file, sign-in code could not be sent');
 
     return NextResponse.json({
       success: true,

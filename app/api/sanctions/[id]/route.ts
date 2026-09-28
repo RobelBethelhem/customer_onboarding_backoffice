@@ -3,6 +3,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import SanctionEntry from '@/lib/models/SanctionEntry';
 import SanctionSource from '@/lib/models/SanctionSource';
 import AuditLog, { calculateChanges } from '@/lib/models/AuditLog';
+import { auditContext } from '@/lib/audit';
 
 // Generate unique audit ID
 function generateAuditId(): string {
@@ -108,6 +109,7 @@ export async function PUT(
 
     // Create audit log
     await AuditLog.create({
+      ...auditContext(request), // who (id, name, email, role), IP and browser
       auditId: generateAuditId(),
       module: 'SANCTIONS',
       action: 'UPDATE',
@@ -184,6 +186,7 @@ export async function DELETE(
 
     // Create audit log
     await AuditLog.create({
+      ...auditContext(request), // who (id, name, email, role), IP and browser
       auditId: generateAuditId(),
       module: 'SANCTIONS',
       action: 'DELETE',

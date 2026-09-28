@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import Customer from '@/lib/models/Customer';
+import Customer from '@/lib/models/Customer';
+
+// Always run on request: otherwise `next build` pre-renders this route, which freezes its data
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import { compareOtp, signToken } from '@/lib/auth';
+import { audit, userActor } from '@/lib/audit';
 
 const MAX_ATTEMPTS = 3;
 
@@ -19,10 +20,21 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
     }
+    const otpAudit = (
+      action: 'LOGIN' | 'LOGIN_FAILED' | 'OTP_FAILED' | 'ACCOUNT_LOCKED',
+      status: 'SUCCESS' | 'FAILURE' | 'DENIED',
+      description: string
+    ) => audit(request, {
+      module: 'AUTH', action, status, description,
+      entityType: 'User', entityId: String(user._id), entityName: user.email,
+      actor: userActor(user),
+    });
     if (user.isLocked) {
+      await otpAudit('LOGIN_FAILED', 'DENIED', 'Sign-in code refused: account is locked');
       return NextResponse.json({ success: false, error: 'Account locked. Contact your administrator.' }, { status: 403 });
     }
     if (!user.loginOtpHash || !user.loginOtpExpires || user.loginOtpExpires.getTime() < Date.now()) {
+      await otpAudit('OTP_FAILED', 'FAILURE', 'Sign-in code expired or was not requested');
       return NextResponse.json({ success: false, error: 'OTP expired or not requested. Please log in again.' }, { status: 400 });
     }
 
@@ -36,6 +48,9 @@ export async function POST(request: Request) {
         locked = true;
       }
       await user.save();
+      await (locked
+        ? otpAudit('ACCOUNT_LOCKED', 'FAILURE', `Wrong sign-in code — account locked after ${MAX_ATTEMPTS} failed attempts`)
+        : otpAudit('OTP_FAILED', 'FAILURE', `Wrong sign-in code (failed attempt ${user.failedLoginAttempts} of ${MAX_ATTEMPTS})`));
       return NextResponse.json({
         success: false,
         error: locked ? 'Account locked after 3 failed attempts. Contact your administrator.' : 'Invalid OTP',
@@ -48,6 +63,7 @@ export async function POST(request: Request) {
     user.loginOtpExpires = undefined;
     user.lastLogin = new Date();
     await user.save();
+    await otpAudit('LOGIN', 'SUCCESS', 'Signed in');
 
     const token = await signToken({
       userId: user._id.toString(),

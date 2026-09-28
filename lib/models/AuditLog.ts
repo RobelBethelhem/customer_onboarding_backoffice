@@ -1,27 +1,9 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import {
+  AUDIT_ACTIONS, AUDIT_MODULES, AUDIT_STATUSES, AuditAction, AuditModule, AuditStatus,
+} from '@/lib/auditTypes';
 
-export type AuditAction =
-  | 'CREATE'
-  | 'UPDATE'
-  | 'DELETE'
-  | 'RESTORE'
-  | 'IMPORT'
-  | 'EXPORT'
-  | 'SCREENING_CHECK'
-  | 'SCREENING_MATCH'
-  | 'SCREENING_CLEAR'
-  | 'STATUS_CHANGE'
-  | 'BULK_UPDATE'
-  | 'BULK_DELETE';
-
-export type AuditModule =
-  | 'SANCTIONS'
-  | 'PEP'
-  | 'CUSTOMER'
-  | 'SCREENING'
-  | 'SETTINGS'
-  | 'USER'
-  | 'SYSTEM';
+export type { AuditAction, AuditModule, AuditStatus };
 
 export interface IFieldChange {
   field: string;
@@ -41,11 +23,14 @@ export interface IAuditLog extends Document {
   entityName?: string; // Human-readable name for display
 
   // Actor
-  performedBy: string; // User ID or 'SYSTEM'
+  performedBy: string; // Display name (or email / 'SYSTEM' / 'Applicant')
+  performedById?: string; // Dashboard user id
   performedByName?: string;
+  performedByEmail?: string;
   performedByRole?: string;
   ipAddress?: string;
   userAgent?: string;
+  status?: AuditStatus; // SUCCESS (default), FAILURE (e.g. wrong password) or DENIED (not allowed)
 
   // Change details
   description: string;
@@ -89,18 +74,13 @@ const AuditLogSchema = new Schema<IAuditLog>({
   auditId: { type: String, required: true, unique: true },
   module: {
     type: String,
-    enum: ['SANCTIONS', 'PEP', 'CUSTOMER', 'SCREENING', 'SETTINGS', 'USER', 'SYSTEM'],
+    enum: [...AUDIT_MODULES],
     required: true,
     index: true,
   },
   action: {
     type: String,
-    enum: [
-      'CREATE', 'UPDATE', 'DELETE', 'RESTORE',
-      'IMPORT', 'EXPORT',
-      'SCREENING_CHECK', 'SCREENING_MATCH', 'SCREENING_CLEAR',
-      'STATUS_CHANGE', 'BULK_UPDATE', 'BULK_DELETE'
-    ],
+    enum: [...AUDIT_ACTIONS],
     required: true,
     index: true,
   },
@@ -110,10 +90,13 @@ const AuditLogSchema = new Schema<IAuditLog>({
   entityName: { type: String },
 
   performedBy: { type: String, required: true, index: true },
+  performedById: { type: String, index: true },
   performedByName: { type: String },
-  performedByRole: { type: String },
+  performedByEmail: { type: String },
+  performedByRole: { type: String, index: true },
   ipAddress: { type: String },
   userAgent: { type: String },
+  status: { type: String, enum: [...AUDIT_STATUSES], default: 'SUCCESS' },
 
   description: { type: String, required: true },
   changes: [FieldChangeSchema],
@@ -148,6 +131,7 @@ AuditLogSchema.index({ timestamp: -1 });
 AuditLogSchema.index({ module: 1, timestamp: -1 });
 AuditLogSchema.index({ entityType: 1, entityId: 1, timestamp: -1 });
 AuditLogSchema.index({ performedBy: 1, timestamp: -1 });
+AuditLogSchema.index({ action: 1, timestamp: -1 });
 
 // Generate audit ID before saving
 AuditLogSchema.pre('save', async function() {

@@ -1,6 +1,7 @@
 // middleware.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify, SignJWT } from 'jose';
+import { clientIp } from './lib/clientIp';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'zemen-bank-jwt-secret-change-in-production'
@@ -55,6 +56,7 @@ function checkPageAccess(role: string, path: string): boolean {
     if (path === '/users' || path.startsWith('/users/')) return false;
     if (path === '/sanctions' || path.startsWith('/sanctions/')) return false;
     if (path === '/services' || path.startsWith('/services/')) return false;
+    if (path === '/audit-logs' || path.startsWith('/audit-logs/')) return false;
     return true;
   }
 
@@ -95,6 +97,7 @@ function checkApiAccess(role: string, method: string, pathname: string): boolean
     if (pathname.startsWith('/api/users')) return false;
     if (pathname.startsWith('/api/sanctions')) return false;
     if (pathname.startsWith('/api/services')) return false;
+    if (pathname.startsWith('/api/audit-logs')) return false;
     return true;
   }
 
@@ -122,9 +125,75 @@ function createRedirectUrl(request: NextRequest, pathname: string): URL {
   return url;
 }
 
+// ── Rate limiting: RATE_LIMIT_MAX (default 100) API requests per minute ─────────────────
+// Counted per signed-in user (staff behind one office IP don't share a budget), otherwise per
+// client IP. Pages and assets aren't counted — Next.js prefetches pages on every navigation.
+// Requests from this server itself (the Fayda backend: no proxy headers, loopback) aren't limited.
+const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX) || 100;
+const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
+const rateHits = new Map<string, { count: number; resetAt: number }>();
+
+async function rateLimitKey(request: NextRequest): Promise<string | null> {
+  const token = request.cookies.get('auth-token')?.value;
+  if (token) {
+    try {
+      const { payload } = await jwtVerify(token, JWT_SECRET);
+      if (payload.userId) return `user:${payload.userId}`;
+    } catch {
+      // invalid or expired session — count it against the client IP
+    }
+  }
+  // Next.js fills in X-Forwarded-For with the socket address when a request arrives without one,
+  // so a loopback "client" is this server itself (the Fayda backend's calls) — not limited.
+  const ip = clientIp(request);
+  return ip && !LOOPBACK.has(ip) ? `ip:${ip}` : null;
+}
+
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+async function checkRateLimit(request: NextRequest): Promise<NextResponse | null> {
+  const key = await rateLimitKey(request);
+  if (!key) return null;
+
+  const now = Date.now();
+  if (rateHits.size > 10_000) {
+    rateHits.forEach((v, k) => { if (now >= v.resetAt) rateHits.delete(k); });
+  }
+  let entry = rateHits.get(key);
+  if (!entry || now >= entry.resetAt) {
+    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    rateHits.set(key, entry);
+  }
+  entry.count++;
+  if (entry.count <= RATE_LIMIT_MAX) return null;
+
+  if (entry.count === RATE_LIMIT_MAX + 1) {
+    console.warn(`[RateLimit] ${key} exceeded ${RATE_LIMIT_MAX} API requests per ${RATE_LIMIT_WINDOW_MS / 1000}s`);
+  }
+  const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+  const message = 'Too many requests. Please wait a minute and try again.';
+  return NextResponse.json(
+    { success: false, error: message, message },
+    {
+      status: 429,
+      headers: {
+        'Retry-After': String(retryAfter),
+        'RateLimit-Limit': String(RATE_LIMIT_MAX),
+        'RateLimit-Remaining': '0',
+        'RateLimit-Reset': String(retryAfter),
+      },
+    }
+  );
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const method = request.method;
+
+  if (pathname.startsWith('/api/') && method !== 'OPTIONS') {
+    const limited = await checkRateLimit(request);
+    if (limited) return limited;
+  }
 
   // Skip public paths
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {

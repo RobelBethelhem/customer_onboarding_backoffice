@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { audit } from '@/lib/audit';
 
 const FAYDA_BACKEND_URL = process.env.FAYDA_BACKEND_URL || 'http://localhost:5000';
 
@@ -17,6 +18,14 @@ export async function GET(
 
     if (!videoId) {
       return NextResponse.json({ error: 'Video ID is required' }, { status: 400 });
+    }
+
+    const range = request.headers.get('range');
+    if (!range || /^bytes=0-/.test(range)) {
+      await audit(request, {
+        module: 'CUSTOMER', action: 'VIEW', entityType: 'FaceVideo', entityId: videoId,
+        description: 'Watched a face verification video',
+      });
     }
 
     const faydaUrl = `${FAYDA_BACKEND_URL}/api/face/video/${videoId}`;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
+import { audit } from '@/lib/audit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -112,6 +113,11 @@ export async function POST(request: NextRequest) {
     });
 
     await customer.save();
+
+    await audit(request, {
+      module: 'CUSTOMER', action: 'CREATE', entityType: 'Customer',
+      entityId: customer.customerId, entityName: customer.fullName, description: 'Created a customer record manually',
+    });
 
     return NextResponse.json({
       success: true,

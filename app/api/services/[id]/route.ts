@@ -4,6 +4,7 @@ import Customer from '@/lib/models/Customer';
 import { requireRole } from '@/lib/apiAuth';
 import { sendSMS } from '@/lib/sms';
 import { normalizeServices, joinServiceLabels, servicesReadySms } from '@/lib/services';
+import { audit } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,6 +80,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     await customer.save();
     console.log(`[Services] ${actor} completed ${services.join(', ')} for ${customer.customerId} (SMS ${smsSent ? 'sent' : 'NOT sent'})`);
+    await audit(request, {
+      module: 'SERVICES', action: 'SERVICES_COMPLETED', entityType: 'Customer',
+      entityId: customer.customerId, entityName: customer.fullName,
+      status: smsSent ? 'SUCCESS' : 'FAILURE',
+      description: `Set up ${joinServiceLabels(services)}; SMS ${smsSent ? 'sent' : 'NOT delivered'}${customMessage ? ' (with a custom message)' : ''}`,
+    });
 
     return NextResponse.json({
       success: true,
