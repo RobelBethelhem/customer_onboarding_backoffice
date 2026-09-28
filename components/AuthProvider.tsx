@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export type UserRole = 'admin' | 'kyc' | 'marketing' | 'branch' | 'senior_approver' | 'sanction_uploader';
+export type UserRole = 'admin' | 'kyc' | 'marketing' | 'branch' | 'senior_approver' | 'sanction_uploader' | 'personal_banker';
 
 interface AuthUser {
   id: string;

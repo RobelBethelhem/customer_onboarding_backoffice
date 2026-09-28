@@ -7,6 +7,7 @@ import { distributeReferralRewards } from '@/lib/referralRewards';
 import Referral from '@/lib/models/Referral';
 import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConfig';
 import { sendSMS } from '@/lib/sms';
+import { servicesInProgressSmsLine } from '@/lib/services';
 
 /**
  * Build FlexCube config from workflow settings
@@ -286,9 +287,11 @@ export async function PATCH(
 
       // ========== SMS NOTIFICATION: ACCOUNT APPROVED ==========
       if (customer.phone) {
+        // Requested Mobile Banking / Internet Banking / Debit Card are set up later by the branch Personal Banker
+        const servicesLine = servicesInProgressSmsLine(customer.requestedServices || []);
         sendSMS(
           customer.phone,
-          `Dear ${customer.fullName},\n\nYour Zemen Bank account has been approved and created successfully!\n\nCIF Number: ${cifNumber}\nAccount Number: ${accountNumber}\nBranch: ${customer.branch}\n\nThank you for banking with Zemen Bank!`
+          `Dear ${customer.fullName},\n\nYour Zemen Bank account has been approved and created successfully!\n\nCIF Number: ${cifNumber}\nAccount Number: ${accountNumber}\nBranch: ${customer.branch}\n\n${servicesLine ? `${servicesLine}\n\n` : ''}Thank you for banking with Zemen Bank!`
         ); // fire-and-forget — don't await
       }
 
@@ -516,6 +519,8 @@ export async function PATCH(
         'cifNumber', 'accountNumber', 'customerNumber', 'customerId', '_id',
         // the CIF an existing customer's account is opened under, and its FlexCube check
         'isExistingCustomer', 'existingCif', 'existingAccountNumber', 'existingCifCheck',
+        // what the customer asked for, and the Personal Banker's record of setting it up
+        'requestedServices', 'servicesStatus', 'completedServices', 'serviceNotifications',
       ];
       for (const k of blocked) delete body[k];
       Object.assign(customer, body);

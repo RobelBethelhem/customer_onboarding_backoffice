@@ -8,6 +8,7 @@ import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConf
 import { distributeReferralRewards } from '@/lib/referralRewards';
 import { sendSMS } from '@/lib/sms';
 import { screenCustomer, calculateSimilarity } from '@/lib/sanctionsScreening';
+import { normalizeServices, servicesInProgressSmsLine } from '@/lib/services';
 
 // Run referral index migration once on first request
 let referralIndexesMigrated = false;
@@ -137,6 +138,10 @@ export async function POST(request: Request) {
       existingCif = existingAccountNumber.substring(6, 13);
     }
     const isExistingCustomer = !!(body.existingCustomer || existingCif || existingAccountNumber);
+
+    // Mobile Banking / Internet Banking / Debit Card the applicant asked for — set up by the
+    // branch Personal Banker once the account is opened
+    const requestedServices = normalizeServices(body.requestedServices);
 
     if (isExistingCustomer) {
       if (existingAccountNumber && existingAccountNumber.length !== 16) {
@@ -380,6 +385,9 @@ export async function POST(request: Request) {
       existingCif: isExistingCustomer ? existingCif : '',
       existingAccountNumber: isExistingCustomer ? existingAccountNumber : '',
       existingCifCheck,
+      // Additional services for the branch Personal Banker
+      requestedServices,
+      servicesStatus: requestedServices.length ? 'pending' : 'none',
       // Marriage certificate photo (only for married customers)
       marriageCertificatePhoto: body.marriageCertificatePhoto,
       // Photos - Fayda ID photo and selfie
@@ -538,6 +546,7 @@ export async function POST(request: Request) {
       let statusMsg = `Your account opening request has been submitted (Application ID: ${customer.customerId}). Our team will review it and reach out to you soon.`;
       if (status === 'auto_approved') {
         statusMsg = `Your Zemen Bank account has been opened successfully (Application ID: ${customer.customerId}).`;
+        if (requestedServices.length) statusMsg += `\n\n${servicesInProgressSmsLine(requestedServices)}`;
       } else if (complianceHold) {
         statusMsg = `Your account opening request (Application ID: ${customer.customerId}) has been submitted and requires additional verification. We will reach out to you soon.`;
       }

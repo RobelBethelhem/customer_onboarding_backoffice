@@ -7,8 +7,9 @@ import {
   ArrowLeft, User, MapPin, Briefcase, CreditCard, Calendar,
   Phone, Mail, CheckCircle2, XCircle,
   Camera, Eye, AlertTriangle, Download, Printer, Loader2, FileText, Video,
-  Shield, Megaphone, Lock, UserCheck
+  Shield, Megaphone, Lock, UserCheck, Smartphone
 } from 'lucide-react';
+import { SERVICE_LABELS, ServiceKey } from '@/lib/services';
 import {
   fetchCustomer, approveCustomer, rejectCustomer, returnCustomer, escalateCustomer, reviewCustomer,
   acquireLock, releaseLock,
@@ -1100,6 +1101,40 @@ export default function CustomerDetailPage() {
               )}
             </div>
           </div>
+
+          {/* Additional services — set up by the branch Personal Banker once the account is opened */}
+          {(customer.requestedServices || []).length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
+                  <Smartphone className="w-5 h-5 text-pink-600" />
+                </div>
+                <h2 className="text-lg font-semibold text-gray-900">Additional Services</h2>
+              </div>
+              <div className="space-y-3">
+                {(customer.requestedServices || []).map(service => {
+                  const done = (customer.completedServices || []).find(s => s.service === service);
+                  return (
+                    <div key={service} className="flex items-start justify-between gap-3">
+                      <span className="font-medium text-gray-900">{SERVICE_LABELS[service as ServiceKey] || service}</span>
+                      {done ? (
+                        <span className="text-xs text-right text-green-700">
+                          Created by {done.completedBy}<br />{formatDate(done.completedAt)}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                          {isPending || isInReview || isEscalated ? 'Requested' : 'Waiting for Personal Banker'}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-gray-400 mt-4">
+                Set up by the Personal Banker of branch {customer.branchCode} after the account is opened.
+              </p>
+            </div>
+          )}
 
           {/* Employment Details */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">

@@ -11,7 +11,7 @@ interface UserRecord {
   _id: string;
   email: string;
   name: string;
-  role: 'admin' | 'kyc' | 'marketing' | 'branch' | 'senior_approver' | 'sanction_uploader';
+  role: 'admin' | 'kyc' | 'marketing' | 'branch' | 'senior_approver' | 'sanction_uploader' | 'personal_banker';
   branchCode?: string;
   phone?: string;
   isActive: boolean;
@@ -30,7 +30,7 @@ export default function UserManagementPage() {
     password: '',
     name: '',
     phone: '',
-    role: 'kyc' as 'admin' | 'kyc' | 'marketing' | 'branch' | 'senior_approver' | 'sanction_uploader',
+    role: 'kyc' as 'admin' | 'kyc' | 'marketing' | 'branch' | 'senior_approver' | 'sanction_uploader' | 'personal_banker',
     branchCode: '',
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -177,6 +177,8 @@ export default function UserManagementPage() {
         return <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700">Marketing</span>;
       case 'branch':
         return <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-700">Branch</span>;
+      case 'personal_banker':
+        return <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-pink-100 text-pink-700">Personal Banker</span>;
       default:
         return <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700">{role}</span>;
     }
@@ -305,10 +307,11 @@ export default function UserManagementPage() {
                   <option value="sanction_uploader">PEP &amp; Sanctions Uploader - Manage the sanctions list only</option>
                   <option value="marketing">Marketing - Referral program only</option>
                   <option value="branch">Branch - View approved customers (read-only)</option>
+                  <option value="personal_banker">Personal Banker (PBB) - Set up requested services for their branch</option>
                 </select>
               </div>
 
-              {formData.role === 'branch' && (
+              {(formData.role === 'branch' || formData.role === 'personal_banker') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Branch Code</label>
                   <input
@@ -319,7 +322,11 @@ export default function UserManagementPage() {
                     required
                     placeholder="e.g., 103, 164"
                   />
-                  <p className="text-sm text-gray-500 mt-1">This user will only see approved customers from this branch</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {formData.role === 'personal_banker'
+                      ? 'This user will only see service requests from customers of this branch'
+                      : 'This user will only see approved customers from this branch'}
+                  </p>
                 </div>
               )}
 
@@ -374,7 +381,7 @@ export default function UserManagementPage() {
                 </td>
                 <td className="px-6 py-4">{getRoleBadge(user.role)}</td>
                 <td className="px-6 py-4 text-sm text-gray-500">
-                  {user.role === 'branch' && user.branchCode ? user.branchCode : '-'}
+                  {(user.role === 'branch' || user.role === 'personal_banker') && user.branchCode ? user.branchCode : '-'}
                 </td>
                 <td className="px-6 py-4">
                   {user.isLocked ? (
@@ -472,6 +479,10 @@ export default function UserManagementPage() {
           <div>
             <p className="font-medium text-teal-700 mb-1">PEP &amp; Sanctions Uploader</p>
             <p className="text-gray-600">Manage the sanctions/watchlist database (upload, add, edit) only. No customer or approval access</p>
+          </div>
+          <div>
+            <p className="font-medium text-pink-700 mb-1">Personal Banker (PBB)</p>
+            <p className="text-gray-600">For their branch only: sets up the Mobile Banking, Internet Banking and Debit Card that customers requested, then notifies them by SMS</p>
           </div>
         </div>
       </div>

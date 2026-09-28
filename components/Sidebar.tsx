@@ -18,6 +18,7 @@ import {
   TrendingUp,
   Gift,
   Users,
+  Smartphone,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth, UserRole } from './AuthProvider';
@@ -27,6 +28,7 @@ interface MenuItem {
   href: string;
   icon: any;
   badge?: boolean;
+  servicesBadge?: boolean;  // count of service requests waiting for this Personal Banker
   divider?: boolean;
   roles: UserRole[];
 }
@@ -39,6 +41,7 @@ const menuItems: MenuItem[] = [
   { name: 'Manually Approved', href: '/approved', icon: CheckCircle2, roles: ['admin', 'kyc', 'branch', 'senior_approver'] },
   { name: 'Rejected', href: '/rejected', icon: XCircle, roles: ['admin', 'kyc', 'senior_approver'] },
   { name: 'Sanctions & PEP', href: '/sanctions', icon: Shield, roles: ['admin', 'sanction_uploader'] },
+  { name: 'Service Requests', href: '/services', icon: Smartphone, servicesBadge: true, roles: ['admin', 'personal_banker'] },
   { name: 'Executive Review', href: '/executive-review', icon: TrendingUp, divider: true, roles: ['admin', 'kyc'] },
   { name: 'Referral Program', href: '/referrals', icon: Gift, roles: ['admin', 'marketing'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin', 'kyc', 'marketing'] },
@@ -50,6 +53,7 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [servicesCount, setServicesCount] = useState(0);
 
   const filteredItems = menuItems.filter(item =>
     user && item.roles.includes(user.role)
@@ -62,6 +66,26 @@ export default function Sidebar() {
       return () => clearInterval(interval);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user?.role === 'personal_banker') {
+      fetchServicesCount();
+      const interval = setInterval(fetchServicesCount, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  async function fetchServicesCount() {
+    try {
+      const response = await fetch('/api/services?status=pending');
+      const data = await response.json();
+      if (data.success) {
+        setServicesCount(data.data.length);
+      }
+    } catch (err) {
+      console.error('Failed to fetch service request count:', err);
+    }
+  }
 
   async function fetchPendingCount() {
     try {
@@ -83,6 +107,7 @@ export default function Sidebar() {
       case 'sanction_uploader': return 'Sanctions Uploader';
       case 'marketing': return 'Marketing';
       case 'branch': return `Branch (${user?.branchCode || ''})`;
+      case 'personal_banker': return `Personal Banker (${user?.branchCode || ''})`;
       default: return 'User';
     }
   };
@@ -119,6 +144,7 @@ export default function Sidebar() {
         {filteredItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
+          const count = item.badge ? pendingCount : item.servicesBadge ? servicesCount : 0;
 
           return (
             <div key={item.name}>
@@ -135,18 +161,18 @@ export default function Sidebar() {
                 {!collapsed && (
                   <>
                     <span className="font-medium flex-1">{item.name}</span>
-                    {item.badge && pendingCount > 0 && (
+                    {count > 0 && (
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
                         isActive ? 'bg-white/20 text-white' : 'bg-amber-500 text-white'
                       }`}>
-                        {pendingCount}
+                        {count}
                       </span>
                     )}
                   </>
                 )}
-                {collapsed && item.badge && pendingCount > 0 && (
+                {collapsed && count > 0 && (
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-white text-xs rounded-full flex items-center justify-center">
-                    {pendingCount}
+                    {count}
                   </span>
                 )}
               </Link>

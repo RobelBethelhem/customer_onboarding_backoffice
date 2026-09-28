@@ -100,6 +100,11 @@ export interface Customer {
     message?: string;
     checkedAt?: string;
   };
+  // Additional services — set up by the branch Personal Banker after the account is opened
+  requestedServices?: string[];
+  servicesStatus?: 'none' | 'pending' | 'completed';
+  completedServices?: { service: string; completedAt: string; completedBy: string }[];
+  serviceNotifications?: { services: string[]; message: string; smsSent: boolean; sentAt: string; sentBy: string }[];
 }
 
 export interface CustomerResponse {

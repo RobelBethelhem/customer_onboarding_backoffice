@@ -54,7 +54,13 @@ function checkPageAccess(role: string, path: string): boolean {
     if (path === '/referrals' || path.startsWith('/referrals/')) return false;
     if (path === '/users' || path.startsWith('/users/')) return false;
     if (path === '/sanctions' || path.startsWith('/sanctions/')) return false;
+    if (path === '/services' || path.startsWith('/services/')) return false;
     return true;
+  }
+
+  // Personal Banker: sets up requested services (mobile/internet banking, debit card) for their branch
+  if (role === 'personal_banker') {
+    return path === '/services' || path.startsWith('/services/');
   }
 
   if (role === 'marketing') {
@@ -88,7 +94,12 @@ function checkApiAccess(role: string, method: string, pathname: string): boolean
     if (pathname.startsWith('/api/referrals')) return false;
     if (pathname.startsWith('/api/users')) return false;
     if (pathname.startsWith('/api/sanctions')) return false;
+    if (pathname.startsWith('/api/services')) return false;
     return true;
+  }
+
+  if (role === 'personal_banker') {
+    return pathname.startsWith('/api/services');
   }
 
   if (role === 'marketing') {
@@ -156,6 +167,9 @@ export async function middleware(request: NextRequest) {
         }
         if (role === 'sanction_uploader') {
           return NextResponse.redirect(createRedirectUrl(request, '/sanctions'));
+        }
+        if (role === 'personal_banker') {
+          return NextResponse.redirect(createRedirectUrl(request, '/services'));
         }
         return NextResponse.redirect(createRedirectUrl(request, '/'));
       }

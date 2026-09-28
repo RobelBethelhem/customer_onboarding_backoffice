@@ -18,6 +18,7 @@ export default function LoginPage() {
     if (role === 'senior_approver') return '/escalated';
     if (role === 'branch') return '/approved';
     if (role === 'sanction_uploader') return '/sanctions';
+    if (role === 'personal_banker') return '/services';
     return '/';
   }
 

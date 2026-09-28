@@ -22,6 +22,21 @@ export interface IExistingCifCheck {
   checkedAt?: Date;
 }
 
+// Additional services (Mobile Banking, Internet Banking, Debit Card) set up by the branch Personal Banker
+export interface ICompletedService {
+  service: string;
+  completedAt: Date;
+  completedBy: string;
+}
+
+export interface IServiceNotification {
+  services: string[];
+  message: string;
+  smsSent: boolean;
+  sentAt: Date;
+  sentBy: string;
+}
+
 export interface ICustomer extends Document {
   customerId: string;
   fullName: string;
@@ -111,6 +126,11 @@ export interface ICustomer extends Document {
   existingCif?: string;               // 7-digit CIF entered by the applicant (or taken from their account number)
   existingAccountNumber?: string;     // 16-digit account number the applicant entered, if any
   existingCifCheck?: IExistingCifCheck;
+  // Additional services requested at onboarding ('mobile_banking' | 'internet_banking' | 'debit_card')
+  requestedServices?: string[];
+  servicesStatus?: 'none' | 'pending' | 'completed'; // 'pending' until every requested service is set up
+  completedServices?: ICompletedService[];
+  serviceNotifications?: IServiceNotification[];      // SMS sent by the Personal Banker
 }
 
 // Default placeholder photo
@@ -133,6 +153,20 @@ const ExistingCifCheckSchema = new Schema<IExistingCifCheck>({
   phoneMatch: { type: Boolean },
   message: { type: String },
   checkedAt: { type: Date },
+}, { _id: false });
+
+const CompletedServiceSchema = new Schema<ICompletedService>({
+  service: { type: String, required: true },
+  completedAt: { type: Date, required: true },
+  completedBy: { type: String, default: '' },
+}, { _id: false });
+
+const ServiceNotificationSchema = new Schema<IServiceNotification>({
+  services: { type: [String], default: [] },
+  message: { type: String, default: '' },
+  smsSent: { type: Boolean, default: false },
+  sentAt: { type: Date, required: true },
+  sentBy: { type: String, default: '' },
 }, { _id: false });
 
 const CustomerSchema = new Schema<ICustomer>({
@@ -238,6 +272,11 @@ const CustomerSchema = new Schema<ICustomer>({
   existingCif: { type: String, default: '' },
   existingAccountNumber: { type: String, default: '' },
   existingCifCheck: { type: ExistingCifCheckSchema },
+  // Additional services — set up by the branch Personal Banker after the account is opened
+  requestedServices: { type: [String], default: [] },
+  servicesStatus: { type: String, enum: ['none', 'pending', 'completed'], default: 'none' },
+  completedServices: { type: [CompletedServiceSchema], default: [] },
+  serviceNotifications: { type: [ServiceNotificationSchema], default: [] },
 }, {
   timestamps: true,
 });
@@ -248,5 +287,6 @@ CustomerSchema.index({ createdAt: -1 });
 CustomerSchema.index({ branch: 1 });
 CustomerSchema.index({ uin: 1 });
 CustomerSchema.index({ channel: 1 });
+CustomerSchema.index({ servicesStatus: 1, branchCode: 1 }); // Personal Banker service-request queue
 
 export default mongoose.models.Customer || mongoose.model<ICustomer>('Customer', CustomerSchema);
