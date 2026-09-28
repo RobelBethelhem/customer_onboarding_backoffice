@@ -304,28 +304,29 @@ export default function SanctionsPage() {
     }
   }
 
-  // async function handleDelete() {
-  //   if (!selectedEntry) return;
+  async function handleDelete() {
+    if (!selectedEntry) return;
 
-  //   try {
-  //     const res = await fetch(`/api/sanctions/${selectedEntry.entryId}?deletedBy=Admin`, {
-  //       method: 'DELETE',
-  //     });
+    try {
+      // The server records who deleted it from the session, so no deletedBy is sent
+      const res = await fetch(`/api/sanctions/${selectedEntry.entryId}`, {
+        method: 'DELETE',
+      });
 
-  //     const data = await res.json();
-  //     if (data.success) {
-  //       showToast('Entry deleted successfully', 'success');
-  //       setShowDeleteModal(false);
-  //       setSelectedEntry(null);
-  //       loadData();
-  //     } else {
-  //       showToast(data.error || 'Failed to delete entry', 'error');
-  //     }
-  //   } catch (error) {
-  //     console.error('Delete error:', error);
-  //     showToast('Failed to delete entry', 'error');
-  //   }
-  // }
+      const data = await res.json();
+      if (data.success) {
+        showToast('Entry deleted successfully', 'success');
+        setShowDeleteModal(false);
+        setSelectedEntry(null);
+        loadData();
+      } else {
+        showToast(data.error || 'Failed to delete entry', 'error');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      showToast('Failed to delete entry', 'error');
+    }
+  }
 
   function resetForm() {
     setFormData({
