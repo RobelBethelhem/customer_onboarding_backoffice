@@ -9,6 +9,8 @@ import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConf
 import { sendSMS } from '@/lib/sms';
 import { servicesInProgressSmsLine } from '@/lib/services';
 import { audit, fieldChanges, AuditEvent } from '@/lib/audit';
+import { isIfbProduct } from '@/lib/ifbBranchRules';
+import { ifbBranchFor } from '@/lib/ifbBranches';
 import type { AuditAction, AuditStatus } from '@/lib/auditTypes';
 import type { IFieldChange } from '@/lib/models/AuditLog';
 
@@ -157,6 +159,16 @@ export async function PATCH(
 
       const flexcubeEnabled = settings.flexcubeEnabled !== false;
       const flexcubeConfig = getFlexCubeConfig(settings);
+
+      // IFB accounts open in the IFB branch (e.g. 164 → 664). Resolved again here so a mapping the
+      // admin added after the application was submitted still applies.
+      if (isIfbProduct(customer) && customer.branchCode) {
+        const ifbCode = await ifbBranchFor(customer.branchCode);
+        if (ifbCode && ifbCode !== customer.branchCode) {
+          customer.conventionalBranchCode = customer.conventionalBranchCode || customer.branchCode;
+          customer.branchCode = ifbCode;
+        }
+      }
       // Existing customer: their CIF already exists, so only a new account is opened under it
       const existingCif = customer.isExistingCustomer ? (customer.existingCif || '') : '';
 

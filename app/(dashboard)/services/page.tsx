@@ -119,7 +119,7 @@ export default function ServiceRequestsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Service Requests</h1>
         <p className="text-gray-500 mt-1">
           {isBanker
-            ? `Customers of branch ${user?.branchCode || ''} who asked for Mobile Banking, Internet Banking or a Debit Card. Set the service up, then mark it as created to notify the customer by SMS.`
+            ? `Customers of branch ${user?.branchCode || ''} (including its IFB branch) who asked for Mobile Banking, Internet Banking or a Debit Card. Set the service up, then mark it as created to notify the customer by SMS.`
             : 'Customers who asked for Mobile Banking, Internet Banking or a Debit Card (all branches, view only). The Personal Banker of each branch sets them up and notifies the customer.'}
         </p>
       </div>

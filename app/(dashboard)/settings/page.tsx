@@ -4,9 +4,10 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   User, Bell, Shield, Database, Save, Eye, EyeOff,
   Workflow, Zap, UserCheck, AlertCircle, CheckCircle2,
-  Info, Loader2, RefreshCw, Gift, Plus, Trash2
+  Info, Loader2, RefreshCw, Gift, Plus, Trash2, Building2
 } from 'lucide-react';
 import { useAuth, UserRole } from '@/components/AuthProvider';
+import IfbBranchSettings from '@/components/IfbBranchSettings';
 
 interface WorkflowSettings {
   mode: 'auto' | 'manual';
@@ -71,6 +72,7 @@ const defaultWorkflowSettings: WorkflowSettings = {
 const allTabs: Array<{ id: string; label: string; icon: any; roles: UserRole[] }> = [
   { id: 'workflow', label: 'KYC Workflow', icon: Workflow, roles: ['admin', 'kyc'] },
   { id: 'referral', label: 'Referral Program', icon: Gift, roles: ['admin', 'marketing'] },
+  { id: 'ifb', label: 'IFB Branches', icon: Building2, roles: ['admin'] },
   { id: 'profile', label: 'Profile', icon: User, roles: ['admin', 'kyc'] },
   { id: 'notifications', label: 'Notifications', icon: Bell, roles: ['admin', 'kyc'] },
 ];
@@ -347,6 +349,9 @@ export default function SettingsPage() {
           ))}
         </nav>
       </div>
+
+      {/* IFB branch codes (admin) — has its own Save button */}
+      {activeTab === 'ifb' && <IfbBranchSettings />}
 
       {/* Workflow Settings Tab */}
       {activeTab === 'workflow' && (

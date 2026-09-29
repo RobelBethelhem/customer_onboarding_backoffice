@@ -1071,6 +1071,9 @@ export default function CustomerDetailPage() {
               </div>
               <InfoItem label="Branch" value={customer.branch} />
               <InfoItem label="Branch Code" value={customer.branchCode} />
+              {customer.conventionalBranchCode && (
+                <InfoItem label="Chosen Branch Code (IFB account opened in its IFB code)" value={customer.conventionalBranchCode} />
+              )}
               {customer.isExistingCustomer && (
                 <>
                   <div className="pt-2 border-t">

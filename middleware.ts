@@ -98,6 +98,7 @@ function checkApiAccess(role: string, method: string, pathname: string): boolean
     if (pathname.startsWith('/api/sanctions')) return false;
     if (pathname.startsWith('/api/services')) return false;
     if (pathname.startsWith('/api/audit-logs')) return false;
+    if (pathname.startsWith('/api/ifb-branches')) return false;
     return true;
   }
 

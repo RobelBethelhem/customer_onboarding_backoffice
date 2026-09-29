@@ -5,6 +5,7 @@ import { requireRole } from '@/lib/apiAuth';
 import { sendSMS } from '@/lib/sms';
 import { normalizeServices, joinServiceLabels, servicesReadySms } from '@/lib/services';
 import { audit } from '@/lib/audit';
+import { branchCodesFor } from '@/lib/ifbBranches';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     const branch = request.headers.get('x-user-branch') || '';
-    if (!branch || customer.branchCode !== branch) {
+    if (!branch || !(await branchCodesFor(branch)).includes(customer.branchCode)) {
       return NextResponse.json({ success: false, error: 'This customer belongs to another branch' }, { status: 403 });
     }
     if (!['approved', 'auto_approved'].includes(customer.status)) {

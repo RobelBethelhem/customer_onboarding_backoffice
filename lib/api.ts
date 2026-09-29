@@ -24,6 +24,7 @@ export interface Customer {
   rejectedAt?: string;
   branch: string;
   branchCode: string;
+  conventionalBranchCode?: string; // set when an IFB account was moved to the IFB branch code
   uin: string;
   fcn: string;
   gender: 'male' | 'female';

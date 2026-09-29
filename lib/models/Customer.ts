@@ -58,6 +58,7 @@ export interface ICustomer extends Document {
   rejectedAt?: Date;
   branch: string;
   branchCode?: string;
+  conventionalBranchCode?: string; // the branch the applicant chose, when an IFB account moved to its IFB code
   uin?: string;
   fcn?: string;
   gender?: 'male' | 'female';
@@ -196,6 +197,7 @@ const CustomerSchema = new Schema<ICustomer>({
   rejectedAt: { type: Date },
   branch: { type: String, required: true },
   branchCode: { type: String, default: '' },
+  conventionalBranchCode: { type: String, default: '' },
   uin: { type: String, default: '' },
   fcn: { type: String, default: '' },
   gender: { type: String, enum: ['male', 'female', ''], default: '' },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
 import { audit } from '@/lib/audit';
+import { branchCodesFor } from '@/lib/ifbBranches';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     if (userRole === 'branch' && userBranch) {
       // Branch users can ONLY see approved/auto_approved customers from their branch
       query.status = { $in: ['approved', 'auto_approved'] };
-      query.branchCode = userBranch;
+      query.branchCode = { $in: await branchCodesFor(userBranch) }; // e.g. 164 and its IFB branch 664
     } else {
       // Filter by status (normal behavior for admin/kyc)
       if (status && status !== 'all') {

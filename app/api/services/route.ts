@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
 import { requireRole } from '@/lib/apiAuth';
+import { branchCodesFor } from '@/lib/ifbBranches';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       if (!branch) {
         return NextResponse.json({ success: false, error: 'No branch is assigned to your user' }, { status: 403 });
       }
-      query.branchCode = branch;
+      query.branchCode = { $in: await branchCodesFor(branch) }; // the branch and its IFB branch
     }
 
     const customers = await Customer.find(query).select(FIELDS).sort({ approvedAt: -1 }).limit(500).lean();

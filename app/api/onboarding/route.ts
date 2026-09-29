@@ -10,6 +10,8 @@ import { sendSMS } from '@/lib/sms';
 import { screenCustomer, calculateSimilarity } from '@/lib/sanctionsScreening';
 import { normalizeServices, servicesInProgressSmsLine } from '@/lib/services';
 import { audit, SYSTEM_ACTOR } from '@/lib/audit';
+import { isIfbProduct } from '@/lib/ifbBranchRules';
+import { ifbBranchFor } from '@/lib/ifbBranches';
 
 // Run referral index migration once on first request
 let referralIndexesMigrated = false;
@@ -128,6 +130,15 @@ export async function POST(request: Request) {
         success: false,
         error: `Missing required fields: ${missingFields.join(', ')}`,
       }, { status: 400 });
+    }
+
+    // Interest-free (IFB) accounts are opened in the IFB counterpart of the branch the applicant
+    // chose (e.g. Head Quarter 164 → 664, per Settings → IFB Branches); keep the chosen one too.
+    const conventionalBranchCode = String(body.branchCode || '');
+    if (isIfbProduct(body) && conventionalBranchCode) {
+      const ifbCode = await ifbBranchFor(conventionalBranchCode);
+      if (ifbCode) body.branchCode = ifbCode;
+      else console.warn(`[Onboarding] No IFB branch code configured for branch ${conventionalBranchCode} — kept as is`);
     }
 
     // Existing customer: the applicant already has a CIF — given directly, or taken from their
@@ -335,6 +346,7 @@ export async function POST(request: Request) {
       faceVideoId: body.faceVideoId || '',
       branch: body.branch,
       branchCode: body.branchCode,
+      conventionalBranchCode: body.branchCode !== conventionalBranchCode ? conventionalBranchCode : '',
       // Account type and tier information
       accountTypeId: body.accountTypeId,
       accountTypeName: body.accountTypeName,
