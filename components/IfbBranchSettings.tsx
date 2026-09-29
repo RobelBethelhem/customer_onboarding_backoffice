@@ -4,12 +4,31 @@ import { useEffect, useState } from 'react';
 import { Building2, Plus, Trash2, Save, Loader2, Search, Info, CheckCircle2, AlertCircle } from 'lucide-react';
 import { suggestIfbCode } from '@/lib/ifbBranchRules';
 
-interface Mapping { conventionalCode: string; ifbCode: string; branchName: string }
+interface BranchRow {
+  branchName: string;
+  conventionalCode: string;
+  ifbCode: string;
+  branchType: 'Branch' | 'Sub-branch';
+  category: 'City' | 'Outline';
+  latitude: number | string | null;
+  longitude: number | string | null;
+  active: boolean;
+}
 
-/** Settings → IFB Branches (admin): the conventional → IFB branch code table */
+const emptyRow = (): BranchRow => ({
+  branchName: '', conventionalCode: '', ifbCode: '', branchType: 'Branch', category: 'City',
+  latitude: '', longitude: '', active: true,
+});
+
+const cell = 'w-full px-2 py-1.5 border border-gray-200 focus:border-blue-400 rounded outline-none';
+
+/**
+ * Settings → Branches (admin): the branch directory. The customer web app loads its branch list
+ * from here (GET /api/branches), and IFB accounts open in each branch's IFB code.
+ */
 export default function IfbBranchSettings() {
-  const [rows, setRows] = useState<Mapping[]>([]);
-  const [defaults, setDefaults] = useState<Mapping[]>([]);
+  const [rows, setRows] = useState<BranchRow[]>([]);
+  const [defaults, setDefaults] = useState<BranchRow[]>([]);
   const [meta, setMeta] = useState<{ updatedBy?: string; updatedAt?: string }>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,18 +45,18 @@ export default function IfbBranchSettings() {
         setDefaults(data.data.defaults);
         setMeta({ updatedBy: data.data.updatedBy, updatedAt: data.data.updatedAt });
       } catch (err) {
-        setMessage({ ok: false, text: (err as Error).message || 'Failed to load IFB branch codes' });
+        setMessage({ ok: false, text: (err as Error).message || 'Failed to load branches' });
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  const update = (index: number, field: keyof Mapping, value: string) => {
+  const update = (index: number, field: keyof BranchRow, value: any) => {
     setRows(prev => prev.map((row, i) => {
       if (i !== index) return row;
       const next = { ...row, [field]: value };
-      // Typing a new conventional code fills in the IFB code by the bank rule (1xx → 6xx, 3xx → 8xx)
+      // A new branch code fills in the IFB code by the bank rule (1xx → 6xx, 3xx → 8xx)
       if (field === 'conventionalCode' && (!row.ifbCode || row.ifbCode === suggestIfbCode(row.conventionalCode))) {
         next.ifbCode = suggestIfbCode(value);
       }
@@ -47,10 +66,10 @@ export default function IfbBranchSettings() {
   };
 
   const addMissingDefaults = () => {
-    const have = new Set(rows.map(r => r.conventionalCode));
-    const missing = defaults.filter(d => !have.has(d.conventionalCode));
+    const have = new Set(rows.map(r => `${r.conventionalCode} ${r.branchName}`));
+    const missing = defaults.filter(d => !have.has(`${d.conventionalCode} ${d.branchName}`));
     setRows(prev => [...prev, ...missing]);
-    setMessage({ ok: true, text: missing.length ? `Added ${missing.length} branch(es) from the default rule — remember to save` : 'Every default branch is already listed' });
+    setMessage({ ok: true, text: missing.length ? `Added ${missing.length} branch(es) from the default list — remember to save` : 'Every default branch is already listed' });
   };
 
   const save = async () => {
@@ -60,12 +79,12 @@ export default function IfbBranchSettings() {
       const res = await fetch('/api/ifb-branches', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mappings: rows.filter(r => r.conventionalCode || r.ifbCode) }),
+        body: JSON.stringify({ mappings: rows.filter(r => r.branchName || r.conventionalCode) }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Failed to save');
       setRows(data.data.mappings);
-      setMessage({ ok: true, text: 'IFB branch codes saved' });
+      setMessage({ ok: true, text: 'Branches saved — the web app shows the changes right away' });
     } catch (err) {
       setMessage({ ok: false, text: (err as Error).message });
     } finally {
@@ -77,6 +96,7 @@ export default function IfbBranchSettings() {
   const visible = rows
     .map((row, index) => ({ row, index }))
     .filter(({ row }) => !q || row.conventionalCode.includes(q) || row.ifbCode.includes(q) || row.branchName.toLowerCase().includes(q));
+  const activeCount = rows.filter(r => r.active).length;
 
   if (loading) {
     return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
@@ -90,28 +110,33 @@ export default function IfbBranchSettings() {
             <Building2 className="w-5 h-5 text-green-700" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">IFB Branch Codes</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Branches</h2>
             <p className="text-sm text-gray-500">
-              Interest-free (IFB) accounts are opened in the IFB code of the branch the customer chose.
+              The branch list customers choose from in the web app, and each branch&apos;s IFB code.
             </p>
           </div>
         </div>
         <button
           onClick={save}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Save IFB Codes
+          Save Branches
         </button>
       </div>
 
       <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex gap-3 text-sm text-blue-800">
         <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-        <div>
-          Bank rule: conventional <strong>1xx → 6xx</strong> (Head Quarter 164 → 664) and <strong>3xx → 8xx</strong>
-          (341 → 841). Branch managers and Personal Bankers are set up with the conventional code and see
-          customers of both codes. Add new branches here as they open.
+        <div className="space-y-1">
+          <p>
+            Customers see the <strong>shown</strong> branches in the web app (nearest first, using latitude/longitude).
+            Untick &ldquo;Shown&rdquo; to hide a branch without deleting it.
+          </p>
+          <p>
+            IFB accounts open in the branch&apos;s <strong>IFB code</strong> — bank rule 1xx → 6xx (Head Quarter 164 → 664)
+            and 3xx → 8xx (341 → 841). Branch managers and Personal Bankers keep the branch code and see both.
+          </p>
         </div>
       </div>
 
@@ -133,7 +158,7 @@ export default function IfbBranchSettings() {
           />
         </div>
         <button
-          onClick={() => { setRows(prev => [{ conventionalCode: '', ifbCode: '', branchName: '' }, ...prev]); setSearch(''); }}
+          onClick={() => { setRows(prev => [emptyRow(), ...prev]); setSearch(''); }}
           className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
         >
           <Plus className="w-4 h-4" /> Add branch
@@ -141,51 +166,64 @@ export default function IfbBranchSettings() {
         <button onClick={addMissingDefaults} className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">
           Add missing defaults
         </button>
-        <span className="text-sm text-gray-500">{rows.length} branches</span>
+        <span className="text-sm text-gray-500">{rows.length} branches · {activeCount} shown</span>
       </div>
 
       <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <div className="max-h-[520px] overflow-y-auto">
+        <div className="max-h-[560px] overflow-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 sticky top-0">
+            <thead className="bg-gray-50 sticky top-0 z-10">
               <tr className="text-left text-gray-500">
-                <th className="px-4 py-2.5 font-medium">Branch</th>
-                <th className="px-4 py-2.5 font-medium w-40">Conventional code</th>
-                <th className="px-4 py-2.5 font-medium w-40">IFB code</th>
-                <th className="w-12"></th>
+                <th className="px-3 py-2.5 font-medium min-w-[220px]">Branch name</th>
+                <th className="px-3 py-2.5 font-medium w-24">Code</th>
+                <th className="px-3 py-2.5 font-medium w-24">IFB code</th>
+                <th className="px-3 py-2.5 font-medium w-32">Type</th>
+                <th className="px-3 py-2.5 font-medium w-28">Area</th>
+                <th className="px-3 py-2.5 font-medium w-28">Latitude</th>
+                <th className="px-3 py-2.5 font-medium w-28">Longitude</th>
+                <th className="px-3 py-2.5 font-medium w-16 text-center">Shown</th>
+                <th className="w-10"></th>
               </tr>
             </thead>
             <tbody>
               {visible.map(({ row, index }) => (
-                <tr key={index} className="border-t border-gray-100">
-                  <td className="px-4 py-1.5">
-                    <input
-                      value={row.branchName}
-                      onChange={e => update(index, 'branchName', e.target.value)}
-                      placeholder="Branch name"
-                      className="w-full px-2 py-1.5 border border-transparent hover:border-gray-200 focus:border-blue-400 rounded outline-none"
-                    />
+                <tr key={index} className={`border-t border-gray-100 ${row.active ? '' : 'bg-gray-50 text-gray-400'}`}>
+                  <td className="px-3 py-1.5">
+                    <input value={row.branchName} onChange={e => update(index, 'branchName', e.target.value)} placeholder="Branch name" className={cell} />
                   </td>
-                  <td className="px-4 py-1.5">
-                    <input
-                      value={row.conventionalCode}
-                      onChange={e => update(index, 'conventionalCode', e.target.value.replace(/\D/g, ''))}
-                      placeholder="e.g. 164"
-                      className="w-full px-2 py-1.5 border border-gray-200 focus:border-blue-400 rounded font-mono outline-none"
-                    />
+                  <td className="px-3 py-1.5">
+                    <input value={row.conventionalCode} onChange={e => update(index, 'conventionalCode', e.target.value.replace(/\D/g, ''))}
+                      placeholder="164" className={`${cell} font-mono`} />
                   </td>
-                  <td className="px-4 py-1.5">
-                    <input
-                      value={row.ifbCode}
-                      onChange={e => update(index, 'ifbCode', e.target.value.replace(/\D/g, ''))}
-                      placeholder="e.g. 664"
-                      className="w-full px-2 py-1.5 border border-green-200 bg-green-50/40 focus:border-green-500 rounded font-mono outline-none"
-                    />
+                  <td className="px-3 py-1.5">
+                    <input value={row.ifbCode} onChange={e => update(index, 'ifbCode', e.target.value.replace(/\D/g, ''))}
+                      placeholder="664" className={`${cell} font-mono border-green-200 bg-green-50/40`} />
                   </td>
-                  <td className="px-2 text-center">
+                  <td className="px-3 py-1.5">
+                    <select value={row.branchType} onChange={e => update(index, 'branchType', e.target.value)} className={cell}>
+                      <option value="Branch">Branch</option>
+                      <option value="Sub-branch">Sub-branch</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <select value={row.category} onChange={e => update(index, 'category', e.target.value)} className={cell}>
+                      <option value="City">City</option>
+                      <option value="Outline">Outline</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <input value={row.latitude ?? ''} onChange={e => update(index, 'latitude', e.target.value)} placeholder="9.0105" className={`${cell} font-mono`} />
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <input value={row.longitude ?? ''} onChange={e => update(index, 'longitude', e.target.value)} placeholder="38.7613" className={`${cell} font-mono`} />
+                  </td>
+                  <td className="px-3 py-1.5 text-center">
+                    <input type="checkbox" checked={row.active} onChange={e => update(index, 'active', e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                  </td>
+                  <td className="px-1 text-center">
                     <button
                       onClick={() => setRows(prev => prev.filter((_, i) => i !== index))}
-                      title="Remove"
+                      title="Delete"
                       className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
                     >
                       <Trash2 className="w-4 h-4" />

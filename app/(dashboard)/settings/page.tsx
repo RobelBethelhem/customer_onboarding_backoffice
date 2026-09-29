@@ -72,7 +72,7 @@ const defaultWorkflowSettings: WorkflowSettings = {
 const allTabs: Array<{ id: string; label: string; icon: any; roles: UserRole[] }> = [
   { id: 'workflow', label: 'KYC Workflow', icon: Workflow, roles: ['admin', 'kyc'] },
   { id: 'referral', label: 'Referral Program', icon: Gift, roles: ['admin', 'marketing'] },
-  { id: 'ifb', label: 'IFB Branches', icon: Building2, roles: ['admin'] },
+  { id: 'ifb', label: 'Branches', icon: Building2, roles: ['admin'] },
   { id: 'profile', label: 'Profile', icon: User, roles: ['admin', 'kyc'] },
   { id: 'notifications', label: 'Notifications', icon: Bell, roles: ['admin', 'kyc'] },
 ];
@@ -350,7 +350,7 @@ export default function SettingsPage() {
         </nav>
       </div>
 
-      {/* IFB branch codes (admin) — has its own Save button */}
+      {/* Branch directory incl. IFB codes (admin) — has its own Save button */}
       {activeTab === 'ifb' && <IfbBranchSettings />}
 
       {/* Workflow Settings Tab */}

@@ -1,17 +1,42 @@
-import IfbBranchSettings, { IIfbBranchMapping } from '@/lib/models/IfbBranchSettings';
-import { DEFAULT_IFB_BRANCHES } from '@/lib/ifbBranchDefaults';
+import IfbBranchSettings, { IBranch, IIfbBranchMapping } from '@/lib/models/IfbBranchSettings';
+import { DEFAULT_BRANCHES } from '@/lib/ifbBranchDefaults';
 
-export const defaultIfbMappings = (): IIfbBranchMapping[] =>
-  DEFAULT_IFB_BRANCHES.map(([conventionalCode, ifbCode, branchName]) => ({ conventionalCode, ifbCode, branchName }));
+const DIRECTORY_VERSION = 2;
 
-/** The admin-configured conventional → IFB branch table (seeded with the bank rule on first use) */
-export async function getIfbMappings(): Promise<IIfbBranchMapping[]> {
+export const defaultBranches = (): IBranch[] => DEFAULT_BRANCHES.map(b => ({ ...b }));
+
+/**
+ * The admin-maintained branch directory (Settings → Branches). Seeded with the default list on
+ * first use; an older IFB-codes-only table is upgraded once, keeping the IFB codes saved in it.
+ */
+export async function getBranches(): Promise<IBranch[]> {
   const doc = await IfbBranchSettings.findOneAndUpdate(
     { _id: 'default' },
-    { $setOnInsert: { mappings: defaultIfbMappings(), updatedBy: 'system (default rule)' } },
+    { $setOnInsert: { version: DIRECTORY_VERSION, mappings: defaultBranches(), updatedBy: 'system (default list)' } },
     { upsert: true, new: true }
   ).lean() as any;
-  return doc?.mappings || [];
+
+  if ((doc?.version || 1) >= DIRECTORY_VERSION) return doc.mappings || [];
+
+  const saved: IIfbBranchMapping[] = doc?.mappings || [];
+  const savedIfb = new Map(saved.map(m => [m.conventionalCode, m.ifbCode]));
+  const upgraded = defaultBranches().map(b => ({ ...b, ifbCode: savedIfb.get(b.conventionalCode) ?? b.ifbCode }));
+  const known = new Set(upgraded.map(b => b.conventionalCode));
+  for (const m of saved) {
+    if (!known.has(m.conventionalCode)) {
+      upgraded.push({
+        branchName: m.branchName || `Branch ${m.conventionalCode}`, conventionalCode: m.conventionalCode, ifbCode: m.ifbCode,
+        branchType: 'Branch', category: 'City', latitude: null, longitude: null, active: true,
+      });
+    }
+  }
+  await IfbBranchSettings.updateOne({ _id: 'default' }, { $set: { version: DIRECTORY_VERSION, mappings: upgraded } });
+  return upgraded;
+}
+
+/** Conventional → IFB code pairs (branches that have an IFB code, active or not) */
+export async function getIfbMappings(): Promise<IIfbBranchMapping[]> {
+  return (await getBranches()).filter(b => b.ifbCode);
 }
 
 /**
