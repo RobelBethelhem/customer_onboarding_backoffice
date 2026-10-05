@@ -8,12 +8,12 @@ export const dynamic = 'force-dynamic';
 
 // Fields the Service Requests page needs — never the photos or KYC documents
 const FIELDS = 'customerId fullName phone email branch branchCode accountNumber cifNumber customerNumber ' +
-  'accountType accountTypeName status approvedAt requestedServices servicesStatus completedServices serviceNotifications';
+  'accountType accountTypeName status approvedAt requestedServices requestedServiceDetails servicesStatus completedServices serviceNotifications';
 
 /**
  * GET /api/services?status=pending|completed|all
- * Opened accounts (approved / auto-approved) whose customer asked for Mobile Banking, Internet
- * Banking or a Debit Card. A Personal Banker sees their own branch only; admin sees all branches.
+ * Opened accounts (approved / auto-approved) whose customer asked for additional services (Mobile
+ * Banking, Debit Card …). A Personal Banker sees their own branch only; admin sees all branches.
  */
 export async function GET(request: NextRequest) {
   const denied = requireRole(request, ['admin', 'personal_banker']);

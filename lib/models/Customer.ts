@@ -29,6 +29,26 @@ export interface ICompletedService {
   completedBy: string;
 }
 
+// A requested service as it was when the application was submitted (Products & Services catalog):
+// its name, and which version of its terms and conditions the customer accepted
+export interface IRequestedServiceDetail {
+  id: string;
+  name: string;
+  icon?: string;
+  termsRequired: boolean;
+  termsTitle?: string;
+  termsVersion: number;          // version in force at submission
+  termsAcceptedVersion: number;  // version the customer accepted (0 = not accepted)
+  termsAcceptedAt?: Date;
+}
+
+// Frames from the web app's face check (open mouth, head turn) — shown to KYC with the selfie
+export interface ILivenessFrame {
+  action: string;   // 'mouth' | 'turn'
+  label: string;
+  image: string;    // base64 JPEG
+}
+
 export interface IServiceNotification {
   services: string[];
   message: string;
@@ -135,6 +155,11 @@ export interface ICustomer extends Document {
   servicesStatus?: 'none' | 'pending' | 'completed'; // 'pending' until every requested service is set up
   completedServices?: ICompletedService[];
   serviceNotifications?: IServiceNotification[];      // SMS sent by the Personal Banker
+  requestedServiceDetails?: IRequestedServiceDetail[];
+  // Web app face check, done by the Fayda backend: liveness actions, anti-spoof model, face match
+  // with the Fayda photo (faceMatchScore holds the similarity)
+  faceVerification?: Record<string, any>;
+  livenessFrames?: ILivenessFrame[];
 }
 
 // Default placeholder photo
@@ -171,6 +196,23 @@ const ServiceNotificationSchema = new Schema<IServiceNotification>({
   smsSent: { type: Boolean, default: false },
   sentAt: { type: Date, required: true },
   sentBy: { type: String, default: '' },
+}, { _id: false });
+
+const RequestedServiceDetailSchema = new Schema<IRequestedServiceDetail>({
+  id: { type: String, required: true },
+  name: { type: String, default: '' },
+  icon: { type: String, default: '' },
+  termsRequired: { type: Boolean, default: false },
+  termsTitle: { type: String, default: '' },
+  termsVersion: { type: Number, default: 0 },
+  termsAcceptedVersion: { type: Number, default: 0 },
+  termsAcceptedAt: { type: Date },
+}, { _id: false });
+
+const LivenessFrameSchema = new Schema<ILivenessFrame>({
+  action: { type: String, default: '' },
+  label: { type: String, default: '' },
+  image: { type: String, default: '' },
 }, { _id: false });
 
 const CustomerSchema = new Schema<ICustomer>({
@@ -285,6 +327,9 @@ const CustomerSchema = new Schema<ICustomer>({
   servicesStatus: { type: String, enum: ['none', 'pending', 'completed'], default: 'none' },
   completedServices: { type: [CompletedServiceSchema], default: [] },
   serviceNotifications: { type: [ServiceNotificationSchema], default: [] },
+  requestedServiceDetails: { type: [RequestedServiceDetailSchema], default: [] },
+  faceVerification: { type: Schema.Types.Mixed },
+  livenessFrames: { type: [LivenessFrameSchema], default: [] },
 }, {
   timestamps: true,
 });

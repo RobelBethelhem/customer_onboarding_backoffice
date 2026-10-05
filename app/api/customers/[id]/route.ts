@@ -7,7 +7,7 @@ import { distributeReferralRewards } from '@/lib/referralRewards';
 import Referral from '@/lib/models/Referral';
 import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConfig';
 import { sendSMS } from '@/lib/sms';
-import { servicesInProgressSmsLine } from '@/lib/services';
+import { servicesInProgressSmsLine, serviceNamesFor } from '@/lib/services';
 import { audit, fieldChanges, AuditEvent } from '@/lib/audit';
 import { isIfbProduct } from '@/lib/ifbBranchRules';
 import { ifbBranchFor } from '@/lib/ifbBranches';
@@ -332,8 +332,8 @@ export async function PATCH(
 
       // ========== SMS NOTIFICATION: ACCOUNT APPROVED ==========
       if (customer.phone) {
-        // Requested Mobile Banking / Internet Banking / Debit Card are set up later by the branch Personal Banker
-        const servicesLine = servicesInProgressSmsLine(customer.requestedServices || []);
+        // Requested additional services are set up later by the branch Personal Banker
+        const servicesLine = servicesInProgressSmsLine(customer.requestedServices || [], serviceNamesFor(customer));
         sendSMS(
           customer.phone,
           `Dear ${customer.fullName},\n\nYour Zemen Bank account has been approved and created successfully!\n\nCIF Number: ${cifNumber}\nAccount Number: ${accountNumber}\nBranch: ${customer.branch}\n\n${servicesLine ? `${servicesLine}\n\n` : ''}Thank you for banking with Zemen Bank!`
@@ -565,7 +565,8 @@ export async function PATCH(
         // the CIF an existing customer's account is opened under, and its FlexCube check
         'isExistingCustomer', 'existingCif', 'existingAccountNumber', 'existingCifCheck',
         // what the customer asked for, and the Personal Banker's record of setting it up
-        'requestedServices', 'servicesStatus', 'completedServices', 'serviceNotifications',
+        'requestedServices', 'servicesStatus', 'completedServices', 'serviceNotifications', 'requestedServiceDetails',
+        'faceVerification', 'livenessFrames',
       ];
       for (const k of blocked) delete body[k];
       generalChanges = fieldChanges(customer.toObject(), body, Object.keys(body).filter(k => k !== 'action'));

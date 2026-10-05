@@ -9,13 +9,14 @@ import {
   Camera, Eye, AlertTriangle, Download, Printer, Loader2, FileText, Video,
   Shield, Megaphone, Lock, UserCheck, Smartphone
 } from 'lucide-react';
-import { SERVICE_LABELS, ServiceKey } from '@/lib/services';
+import { serviceNamesFor } from '@/lib/services';
 import {
   fetchCustomer, approveCustomer, rejectCustomer, returnCustomer, escalateCustomer, reviewCustomer,
   acquireLock, releaseLock,
   Customer, getStatusColor, getStatusLabel, formatDate
 } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
+import FaceVerificationPanel from '@/components/FaceVerificationPanel';
 import { ensureDataUri, hasValidPhoto } from '@/lib/imageUtils';
 import { toast } from 'sonner';
 
@@ -348,7 +349,9 @@ export default function CustomerDetailPage() {
       ['Status', getStatusLabel(customer.status)],
       ['CIF Number', customer.cifNumber || '-'],
       ['Account Number', customer.accountNumber || '-'],
-      ['Face Match Score', `${customer.faceMatchScore}%`],
+      ['Face Match Score', customer.faceVerification?.match
+        ? `${customer.faceMatchScore}% (${customer.faceVerification.match.matched ? 'match' : 'no match'}; liveness ${customer.faceVerification.liveness?.performed ? (customer.faceVerification.liveness.passed ? 'passed' : 'failed') : 'not verified'})`
+        : `${customer.faceMatchScore}%`],
       ['Region', customer.region || '-'],
       ['Zone', customer.zone || '-'],
       ['Woreda', customer.woreda || '-'],
@@ -654,8 +657,11 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
+      {/* Web app face check (server result) — otherwise the score sent by the mobile app */}
+      {customer.faceVerification && <FaceVerificationPanel fv={customer.faceVerification} />}
+
       {/* Face Match Score Alert */}
-      {isPending && (
+      {!customer.faceVerification && isPending && (
         <div className={`p-4 rounded-xl flex items-center gap-3 ${
           customer.faceMatchScore >= 85
             ? 'bg-green-50 border border-green-200'
@@ -831,7 +837,9 @@ export default function CustomerDetailPage() {
 
                   {/* Selfie Snapshot (captured from video) */}
                   <div>
-                    <p className="text-sm font-medium text-gray-700 mb-3">Selfie Snapshot (from Video)</p>
+                    <p className="text-sm font-medium text-gray-700 mb-3">
+                      {customer.faceVerification?.method === 'web-liveness-v1' ? 'Selfie (Live Check)' : 'Selfie Snapshot (from Video)'}
+                    </p>
                     {hasValidPhoto(customer.selfiePhoto) ? (
                       <div
                         className="relative aspect-[3/4] bg-gray-100 rounded-xl overflow-hidden border-2 border-violet-500 cursor-pointer hover:opacity-90 transition-opacity"
@@ -840,7 +848,9 @@ export default function CustomerDetailPage() {
                         <img src={ensureDataUri(customer.selfiePhoto)} alt="Selfie Snapshot" className="w-full h-full object-cover" />
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
                           <p className="text-white text-sm font-medium">📸 Selfie Snapshot</p>
-                          <p className="text-white/80 text-xs">Captured from recorded video</p>
+                          <p className="text-white/80 text-xs">
+                            {customer.faceVerification?.method === 'web-liveness-v1' ? 'Captured during the live camera check' : 'Captured from recorded video'}
+                          </p>
                         </div>
                         <div className="absolute top-3 right-3">
                           <Eye className="w-5 h-5 text-white drop-shadow-lg" />
@@ -854,6 +864,27 @@ export default function CustomerDetailPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Frames from the live check (open mouth, head turn) */}
+                {(customer.livenessFrames || []).length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-3">Live Check Frames</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {(customer.livenessFrames || []).map((f, i) => (
+                        <div
+                          key={i}
+                          className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200 cursor-pointer hover:border-violet-400"
+                          onClick={() => setSelectedPhoto(ensureDataUri(f.image))}
+                        >
+                          <img src={ensureDataUri(f.image)} alt={f.label || f.action} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                            <p className="text-white text-xs font-medium">{f.label || f.action}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Recorded Face Video */}
                 <div>
@@ -1127,9 +1158,19 @@ export default function CustomerDetailPage() {
               <div className="space-y-3">
                 {(customer.requestedServices || []).map(service => {
                   const done = (customer.completedServices || []).find(s => s.service === service);
+                  const detail = (customer.requestedServiceDetails || []).find(d => d.id === service);
                   return (
                     <div key={service} className="flex items-start justify-between gap-3">
-                      <span className="font-medium text-gray-900">{SERVICE_LABELS[service as ServiceKey] || service}</span>
+                      <span className="min-w-0">
+                        <span className="block font-medium text-gray-900">{serviceNamesFor(customer)[service] || service}</span>
+                        {detail?.termsRequired && (
+                          <span className={`block text-xs ${detail.termsAcceptedVersion ? 'text-gray-500' : 'text-red-600 font-medium'}`}>
+                            {detail.termsAcceptedVersion
+                              ? `${detail.termsTitle || 'Terms and conditions'} accepted (version ${detail.termsAcceptedVersion}${detail.termsAcceptedAt ? `, ${formatDate(detail.termsAcceptedAt)}` : ''})`
+                              : `${detail.termsTitle || 'Terms and conditions'} not accepted`}
+                          </span>
+                        )}
+                      </span>
                       {done ? (
                         <span className="text-xs text-right text-green-700">
                           Created by {done.completedBy}<br />{formatDate(done.completedAt)}

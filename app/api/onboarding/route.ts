@@ -8,7 +8,8 @@ import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConf
 import { distributeReferralRewards } from '@/lib/referralRewards';
 import { sendSMS } from '@/lib/sms';
 import { screenCustomer, calculateSimilarity } from '@/lib/sanctionsScreening';
-import { normalizeServices, servicesInProgressSmsLine } from '@/lib/services';
+import { normalizeServices, servicesInProgressSmsLine, serviceNamesFor } from '@/lib/services';
+import { getAdditionalServices } from '@/lib/additionalServices';
 import { audit, SYSTEM_ACTOR } from '@/lib/audit';
 import { isIfbProduct } from '@/lib/ifbBranchRules';
 import { ifbBranchFor } from '@/lib/ifbBranches';
@@ -171,9 +172,25 @@ export async function POST(request: Request) {
     }
     const isExistingCustomer = !!(body.existingCustomer || existingCif || existingAccountNumber);
 
-    // Mobile Banking / Internet Banking / Debit Card the applicant asked for — set up by the
-    // branch Personal Banker once the account is opened
-    const requestedServices = normalizeServices(body.requestedServices);
+    // Additional services the applicant asked for (Products & Services catalog) — set up by the
+    // branch Personal Banker once the account is opened. Saved with each service: its name now and
+    // which version of its terms the applicant accepted.
+    const offeredServices = (await getAdditionalServices()).filter(s => s.active);
+    const requestedServices = normalizeServices(body.requestedServices, offeredServices.map(s => s.id));
+    const termsAccepted: any[] = Array.isArray(body.serviceTermsAccepted) ? body.serviceTermsAccepted : [];
+    const requestedServiceDetails = requestedServices.map(id => {
+      const service = offeredServices.find(s => s.id === id)!;
+      const termsRequired = !!service.termsText;
+      const acceptance = termsRequired ? termsAccepted.find(a => a && a.id === id) : undefined;
+      const acceptedAt = acceptance ? new Date(acceptance.acceptedAt) : undefined;
+      return {
+        id, name: service.name, icon: service.icon, termsRequired,
+        termsTitle: termsRequired ? service.termsTitle : '',
+        termsVersion: termsRequired ? service.termsVersion : 0,
+        termsAcceptedVersion: acceptance ? Math.max(0, Math.floor(Number(acceptance.version) || 0)) : 0,
+        termsAcceptedAt: acceptance ? (acceptedAt && !isNaN(acceptedAt.getTime()) ? acceptedAt : new Date()) : undefined,
+      };
+    });
 
     if (isExistingCustomer) {
       if (existingAccountNumber && existingAccountNumber.length !== 16) {
@@ -425,6 +442,7 @@ export async function POST(request: Request) {
       existingCifCheck,
       // Additional services for the branch Personal Banker
       requestedServices,
+      requestedServiceDetails,
       servicesStatus: requestedServices.length ? 'pending' : 'none',
       // Marriage certificate photo (only for married customers)
       marriageCertificatePhoto: body.marriageCertificatePhoto,
@@ -441,6 +459,12 @@ export async function POST(request: Request) {
       },
       // Face match score
       faceMatchScore,
+      // Web app face check by the Fayda backend (liveness actions, anti-spoof model, face match)
+      faceVerification: body.faceVerification && typeof body.faceVerification === 'object' ? body.faceVerification : undefined,
+      livenessFrames: (Array.isArray(body.livenessFrames) ? body.livenessFrames : [])
+        .filter((f: any) => f && typeof f.image === 'string' && f.image.length < 2_000_000)
+        .slice(0, 4)
+        .map((f: any) => ({ action: String(f.action || ''), label: String(f.label || ''), image: f.image })),
       // FlexCube numbers (only populated on auto-approval with FlexCube enabled)
       customerNumber,
       cifNumber,
@@ -598,7 +622,7 @@ export async function POST(request: Request) {
       let statusMsg = `Your account opening request has been submitted (Application ID: ${customer.customerId}). Our team will review it and reach out to you soon.`;
       if (status === 'auto_approved') {
         statusMsg = `Your Zemen Bank account has been opened successfully (Application ID: ${customer.customerId}).`;
-        if (requestedServices.length) statusMsg += `\n\n${servicesInProgressSmsLine(requestedServices)}`;
+        if (requestedServices.length) statusMsg += `\n\n${servicesInProgressSmsLine(requestedServices, serviceNamesFor({ requestedServiceDetails }))}`;
       } else if (complianceHold) {
         statusMsg = `Your account opening request (Application ID: ${customer.customerId}) has been submitted and requires additional verification. We will reach out to you soon.`;
       }

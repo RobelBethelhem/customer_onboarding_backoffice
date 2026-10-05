@@ -28,6 +28,7 @@ function isPublicApiRoute(method: string, pathname: string): boolean {
   if (pathname.startsWith('/api/applications/status') && method === 'GET') return true;
   if (pathname === '/api/branches' && method === 'GET') return true; // branch list for the web app
   if (pathname === '/api/account-products' && method === 'GET') return true; // product catalog for the web app
+  if (pathname === '/api/additional-services' && method === 'GET') return true; // services catalog for the web app
   if (pathname === '/api/referrals/verify' && method === 'POST') return true;
   if (
     pathname.startsWith('/api/referrals/') &&

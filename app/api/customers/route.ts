@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
     }
 
     const customers = await Customer.find(query)
+      .select('-livenessFrames') // live-check images: on the detail page only
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)

@@ -2,24 +2,28 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Smartphone, Globe, CreditCard, Search, Loader2, CheckCircle2, Clock, Send, X, MessageSquare, AlertTriangle,
+  Search, Loader2, CheckCircle2, Clock, Send, X, MessageSquare, AlertTriangle, FileCheck2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
 import { Customer, formatDate } from '@/lib/api';
-import { SERVICE_KEYS, SERVICE_LABELS, ServiceKey, servicesReadySms } from '@/lib/services';
+import { servicesReadySms, serviceNamesFor } from '@/lib/services';
+import ServiceIcon from '@/components/ServiceIcon';
 
 type Tab = 'pending' | 'completed';
-
-const SERVICE_ICONS: Record<ServiceKey, React.ElementType> = {
-  mobile_banking: Smartphone,
-  internet_banking: Globe,
-  debit_card: CreditCard,
-};
 
 const MAX_CUSTOM_MESSAGE = 300;
 
 const doneRecord = (c: Customer, service: string) => (c.completedServices || []).find(s => s.service === service);
+// The service as requested: name, icon and terms acceptance saved with the application
+const detailOf = (c: Customer, service: string) => (c.requestedServiceDetails || []).find(d => d.id === service);
+const termsNote = (c: Customer, service: string): { ok: boolean; text: string } | null => {
+  const d = detailOf(c, service);
+  if (!d?.termsRequired) return null;
+  return d.termsAcceptedVersion
+    ? { ok: true, text: `Terms accepted (version ${d.termsAcceptedVersion}${d.termsAcceptedAt ? `, ${formatDate(d.termsAcceptedAt)}` : ''})` }
+    : { ok: false, text: 'Terms not accepted online — have the customer sign them at the branch' };
+};
 
 export default function ServiceRequestsPage() {
   const { user } = useAuth();
@@ -109,7 +113,10 @@ export default function ServiceRequestsPage() {
   );
 
   const preview = active && selected.length
-    ? servicesReadySms(active.fullName, active.accountNumber, SERVICE_KEYS.filter(k => selected.includes(k)), customMessage)
+    ? servicesReadySms(
+        active.fullName, active.accountNumber,
+        (active.requestedServices || []).filter(s => selected.includes(s)), customMessage, serviceNamesFor(active)
+      )
     : '';
 
   return (
@@ -119,8 +126,8 @@ export default function ServiceRequestsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Service Requests</h1>
         <p className="text-gray-500 mt-1">
           {isBanker
-            ? `Customers of branch ${user?.branchCode || ''} (including its IFB branch) who asked for Mobile Banking, Internet Banking or a Debit Card. Set the service up, then mark it as created to notify the customer by SMS.`
-            : 'Customers who asked for Mobile Banking, Internet Banking or a Debit Card (all branches, view only). The Personal Banker of each branch sets them up and notifies the customer.'}
+            ? `Customers of branch ${user?.branchCode || ''} (including its IFB branch) who asked for additional services such as Mobile Banking or a Debit Card. Set the service up, then mark it as created to notify the customer by SMS.`
+            : 'Customers who asked for additional services such as Mobile Banking or a Debit Card (all branches, view only). The Personal Banker of each branch sets them up and notifies the customer.'}
         </p>
       </div>
 
@@ -189,17 +196,18 @@ export default function ServiceRequestsPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {(customer.requestedServices || []).map(service => {
                           const done = doneRecord(customer, service);
-                          const Icon = SERVICE_ICONS[service as ServiceKey] || Smartphone;
+                          const terms = termsNote(customer, service);
                           return (
                             <span
                               key={service}
-                              title={done ? `Created ${formatDate(done.completedAt)} by ${done.completedBy}` : 'Waiting to be set up'}
+                              title={(done ? `Created ${formatDate(done.completedAt)} by ${done.completedBy}` : 'Waiting to be set up') + (terms ? ` · ${terms.text}` : '')}
                               className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
                                 done ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                               }`}
                             >
-                              <Icon className="w-3.5 h-3.5" />
-                              {SERVICE_LABELS[service as ServiceKey] || service}
+                              <ServiceIcon id={service} icon={detailOf(customer, service)?.icon} className="w-3.5 h-3.5" />
+                              {serviceNamesFor(customer)[service] || service}
+                              {terms && <FileCheck2 className={`w-3.5 h-3.5 ${terms.ok ? '' : 'text-red-600'}`} />}
                               {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
                             </span>
                           );
@@ -261,7 +269,7 @@ export default function ServiceRequestsPage() {
                 <div className="space-y-2">
                   {(active.requestedServices || []).map(service => {
                     const done = doneRecord(active, service);
-                    const Icon = SERVICE_ICONS[service as ServiceKey] || Smartphone;
+                    const terms = termsNote(active, service);
                     return (
                       <label
                         key={service}
@@ -275,8 +283,13 @@ export default function ServiceRequestsPage() {
                           onChange={() => toggleService(service)}
                           className="w-4 h-4 accent-blue-600"
                         />
-                        <Icon className="w-5 h-5 text-gray-500" />
-                        <span className="flex-1 font-medium text-gray-800">{SERVICE_LABELS[service as ServiceKey] || service}</span>
+                        <ServiceIcon id={service} icon={detailOf(active, service)?.icon} className="w-5 h-5 text-gray-500" />
+                        <span className="flex-1 min-w-0">
+                          <span className="block font-medium text-gray-800">{serviceNamesFor(active)[service] || service}</span>
+                          {terms && (
+                            <span className={`block text-xs ${terms.ok ? 'text-gray-500' : 'text-red-600 font-medium'}`}>{terms.text}</span>
+                          )}
+                        </span>
                         {done && (
                           <span className="text-xs text-green-700">
                             Created {formatDate(done.completedAt)} by {done.completedBy}
@@ -315,7 +328,7 @@ export default function ServiceRequestsPage() {
                   <ul className="space-y-1 text-xs text-gray-500">
                     {(active.serviceNotifications || []).map((n, i) => (
                       <li key={i}>
-                        {formatDate(n.sentAt)} · {n.sentBy} · {n.services.map(s => SERVICE_LABELS[s as ServiceKey] || s).join(', ')}
+                        {formatDate(n.sentAt)} · {n.sentBy} · {n.services.map(s => serviceNamesFor(active)[s] || s).join(', ')}
                         {n.smsSent ? '' : ' · SMS not delivered'}
                       </li>
                     ))}

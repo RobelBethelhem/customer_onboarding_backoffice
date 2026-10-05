@@ -109,6 +109,29 @@ export interface Customer {
   servicesStatus?: 'none' | 'pending' | 'completed';
   completedServices?: { service: string; completedAt: string; completedBy: string }[];
   serviceNotifications?: { services: string[]; message: string; smsSent: boolean; sentAt: string; sentBy: string }[];
+  requestedServiceDetails?: {
+    id: string; name: string; icon?: string; termsRequired?: boolean; termsTitle?: string;
+    termsVersion?: number; termsAcceptedVersion?: number; termsAcceptedAt?: string;
+  }[];
+  // Web app face check by the Fayda backend (see FaceVerificationResult)
+  faceVerification?: FaceVerificationResult;
+  livenessFrames?: { action: string; label: string; image: string }[];
+}
+
+export interface FaceVerificationResult {
+  verifiedBy?: 'server' | string;
+  method?: string;                   // 'web-liveness-v1' | 'compare-at-submission'
+  checkedAt?: string;
+  match?: { similarity: number; distance: number; threshold: number; matched: boolean; engine?: string } | null;
+  matchError?: string;
+  liveness?: {
+    performed: boolean;
+    passed: boolean;
+    actions?: string[];
+    reason?: string;
+    checks?: { name: string; passed: boolean; detail?: string }[];
+    antiSpoof?: { score: number | null; threshold: number; enforced: boolean; model?: string } | null;
+  };
 }
 
 export interface CustomerResponse {
