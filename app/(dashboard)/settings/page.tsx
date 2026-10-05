@@ -18,6 +18,9 @@ interface WorkflowSettings {
   notifyOnManualRequired: boolean;
   flexcubeEnabled: boolean;
   useProductAccountClass: boolean;
+  flexcubeIaServiceUrl: string;    // IFB accounts (FCUBSIAService); '' = derived from the Account Service URL
+  flexcubeIfbAccountClass: string;
+  flexcubeIfbAccountCode: string;
   flexcubeCustomerServiceUrl: string;
   flexcubeAccountServiceUrl: string;
   flexcubeUserId: string;
@@ -62,6 +65,9 @@ const defaultWorkflowSettings: WorkflowSettings = {
   notifyOnManualRequired: true,
   flexcubeEnabled: true,
   useProductAccountClass: false,
+  flexcubeIaServiceUrl: '',
+  flexcubeIfbAccountClass: 'WCSA',
+  flexcubeIfbAccountCode: '126',
   flexcubeCustomerServiceUrl: 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
   flexcubeAccountServiceUrl: 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
   flexcubeUserId: 'FYDA_USR',
@@ -136,6 +142,9 @@ export default function SettingsPage() {
           notifyOnManualRequired: data.data.notifyOnManualRequired ?? true,
           flexcubeEnabled: data.data.flexcubeEnabled ?? true,
           useProductAccountClass: data.data.useProductAccountClass === true,
+          flexcubeIaServiceUrl: data.data.flexcubeIaServiceUrl || '',
+          flexcubeIfbAccountClass: data.data.flexcubeIfbAccountClass || 'WCSA',
+          flexcubeIfbAccountCode: data.data.flexcubeIfbAccountCode || '126',
           flexcubeCustomerServiceUrl: data.data.flexcubeCustomerServiceUrl || 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
           flexcubeAccountServiceUrl: data.data.flexcubeAccountServiceUrl || 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
           flexcubeUserId: data.data.flexcubeUserId || 'FYDA_USR',
@@ -565,172 +574,6 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
-                {/* FlexCube Core Banking SOAP Integration */}
-                <div className="pt-4 border-t">
-                  <h3 className="font-medium text-gray-900 mb-1">FlexCube Core Banking (SOAP)</h3>
-                  <p className="text-sm text-gray-500 mb-4">Connect to Oracle FlexCube Universal Banking for real CIF and Account creation</p>
-
-                  <div className="flex items-center justify-between py-3">
-                    <div>
-                      <p className="font-medium text-gray-900">Enable FlexCube Integration</p>
-                      <p className="text-sm text-gray-500">Call FlexCube SOAP webservice for CIF + Account creation</p>
-                    </div>
-                    <button
-                      onClick={() => setWorkflowSettings({
-                        ...workflowSettings,
-                        flexcubeEnabled: !workflowSettings.flexcubeEnabled,
-                      })}
-                      className={`relative w-12 h-6 rounded-full transition-colors ${
-                        workflowSettings.flexcubeEnabled ? 'bg-green-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                          workflowSettings.flexcubeEnabled ? 'translate-x-7' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between py-3">
-                    <div>
-                      <p className="font-medium text-gray-900">Use Account Product Codes as Account Class</p>
-                      <p className="text-sm text-gray-500">
-                        Open accounts with the class code from Account Products (ZDAC, DBSV, DWAD…). Turn on only once these
-                        classes exist in FlexCube — when off, accounts are opened with the default class (SPRI).
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setWorkflowSettings({
-                        ...workflowSettings,
-                        useProductAccountClass: !workflowSettings.useProductAccountClass,
-                      })}
-                      className={`relative w-12 h-6 shrink-0 ml-4 rounded-full transition-colors ${
-                        workflowSettings.useProductAccountClass ? 'bg-green-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                          workflowSettings.useProductAccountClass ? 'translate-x-7' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  {!workflowSettings.flexcubeEnabled && (
-                    <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                      <p className="text-sm text-amber-700">
-                        <span className="font-medium">FlexCube disabled:</span> CIF and Account numbers will be generated locally (not in core banking).
-                      </p>
-                    </div>
-                  )}
-
-                  {workflowSettings.flexcubeEnabled && (
-                    <div className="space-y-4 mt-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          CIF Service URL (FCUBSCustomerService)
-                        </label>
-                        <input
-                          type="text"
-                          value={workflowSettings.flexcubeCustomerServiceUrl}
-                          onChange={(e) => setWorkflowSettings({
-                            ...workflowSettings,
-                            flexcubeCustomerServiceUrl: e.target.value,
-                          })}
-                          placeholder="http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService"
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Account Service URL (FCUBSAccService)
-                        </label>
-                        <input
-                          type="text"
-                          value={workflowSettings.flexcubeAccountServiceUrl}
-                          onChange={(e) => setWorkflowSettings({
-                            ...workflowSettings,
-                            flexcubeAccountServiceUrl: e.target.value,
-                          })}
-                          placeholder="http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService"
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            User ID
-                          </label>
-                          <input
-                            type="text"
-                            value={workflowSettings.flexcubeUserId}
-                            onChange={(e) => setWorkflowSettings({
-                              ...workflowSettings,
-                              flexcubeUserId: e.target.value,
-                            })}
-                            placeholder="FYDA_USR"
-                            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Source
-                          </label>
-                          <input
-                            type="text"
-                            value={workflowSettings.flexcubeSource}
-                            onChange={(e) => setWorkflowSettings({
-                              ...workflowSettings,
-                              flexcubeSource: e.target.value,
-                            })}
-                            placeholder="EXTFYDA"
-                            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Default Branch
-                          </label>
-                          <input
-                            type="text"
-                            value={workflowSettings.flexcubeBranch}
-                            onChange={(e) => setWorkflowSettings({
-                              ...workflowSettings,
-                              flexcubeBranch: e.target.value,
-                            })}
-                            placeholder="103"
-                            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          SOAP Timeout (ms)
-                        </label>
-                        <input
-                          type="number"
-                          value={workflowSettings.flexcubeTimeout}
-                          onChange={(e) => setWorkflowSettings({
-                            ...workflowSettings,
-                            flexcubeTimeout: parseInt(e.target.value) || 30000,
-                          })}
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        />
-                      </div>
-
-                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700">
-                          <span className="font-medium">Flow:</span> CreateCustomer (CIF) → CreateCustAcc (Account). Both calls use SOAP/XML over HTTP to the FlexCube FCUBS endpoints.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
                 {/* Notifications */}
                 <div className="flex items-center justify-between py-3 border-t">
                   <div>
@@ -747,7 +590,7 @@ export default function SettingsPage() {
                     }`}
                   >
                     <span
-                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                      className={`absolute left-0 top-1 w-4 h-4 bg-white rounded-full transition-transform ${
                         workflowSettings.notifyOnAutoApproval ? 'translate-x-7' : 'translate-x-1'
                       }`}
                     />
@@ -769,7 +612,7 @@ export default function SettingsPage() {
                     }`}
                   >
                     <span
-                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                      className={`absolute left-0 top-1 w-4 h-4 bg-white rounded-full transition-transform ${
                         workflowSettings.notifyOnManualRequired ? 'translate-x-7' : 'translate-x-1'
                       }`}
                     />
@@ -821,6 +664,245 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+
+          {/* FlexCube Core Banking — accounts are opened here on manual approval and auto-approval alike */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <Database className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">FlexCube Core Banking (SOAP)</h2>
+                <p className="text-sm text-gray-500">Connect to Oracle FlexCube Universal Banking for real CIF and Account creation</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <p className="font-medium text-gray-900">Enable FlexCube Integration</p>
+                <p className="text-sm text-gray-500">Call FlexCube SOAP webservice for CIF + Account creation</p>
+              </div>
+              <button
+                onClick={() => setWorkflowSettings({
+                  ...workflowSettings,
+                  flexcubeEnabled: !workflowSettings.flexcubeEnabled,
+                })}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  workflowSettings.flexcubeEnabled ? 'bg-green-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`absolute left-0 top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    workflowSettings.flexcubeEnabled ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <p className="font-medium text-gray-900">Use Account Product Codes as Account Class</p>
+                <p className="text-sm text-gray-500">
+                  Open accounts with the class code from Account Products (ZDAC, DBSV, DWAD…). Turn on only once these
+                  classes exist in FlexCube — when off, accounts are opened with the default class (SPRI), and IFB
+                  accounts with the IFB account class below.
+                </p>
+              </div>
+              <button
+                onClick={() => setWorkflowSettings({
+                  ...workflowSettings,
+                  useProductAccountClass: !workflowSettings.useProductAccountClass,
+                })}
+                className={`relative w-12 h-6 shrink-0 ml-4 rounded-full transition-colors ${
+                  workflowSettings.useProductAccountClass ? 'bg-green-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`absolute left-0 top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    workflowSettings.useProductAccountClass ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {!workflowSettings.flexcubeEnabled && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-700">
+                  <span className="font-medium">FlexCube disabled:</span> CIF and Account numbers will be generated locally (not in core banking).
+                </p>
+              </div>
+            )}
+
+            {workflowSettings.flexcubeEnabled && (
+              <div className="space-y-4 mt-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    CIF Service URL (FCUBSCustomerService)
+                  </label>
+                  <input
+                    type="text"
+                    value={workflowSettings.flexcubeCustomerServiceUrl}
+                    onChange={(e) => setWorkflowSettings({
+                      ...workflowSettings,
+                      flexcubeCustomerServiceUrl: e.target.value,
+                    })}
+                    placeholder="http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Account Service URL (FCUBSAccService)
+                  </label>
+                  <input
+                    type="text"
+                    value={workflowSettings.flexcubeAccountServiceUrl}
+                    onChange={(e) => setWorkflowSettings({
+                      ...workflowSettings,
+                      flexcubeAccountServiceUrl: e.target.value,
+                    })}
+                    placeholder="http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
+                  />
+                </div>
+
+                {/* IFB accounts are opened through FlexCube's Islamic Accounting service */}
+                <div className="p-4 border border-emerald-200 bg-emerald-50/50 rounded-lg space-y-4">
+                  <div>
+                    <p className="font-medium text-gray-900">Interest-Free (IFB) Accounts</p>
+                    <p className="text-sm text-gray-500">
+                      Opened through the Islamic account service: FCUBSIAService → CreateIACustAcc (module IA).
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      IFB Account Service URL (FCUBSIAService)
+                    </label>
+                    <input
+                      type="text"
+                      value={workflowSettings.flexcubeIaServiceUrl}
+                      onChange={(e) => setWorkflowSettings({
+                        ...workflowSettings,
+                        flexcubeIaServiceUrl: e.target.value,
+                      })}
+                      placeholder={(workflowSettings.flexcubeAccountServiceUrl || '').replace(/FCUBSAccService/g, 'FCUBSIAService')}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm bg-white"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Leave empty to use the Account Service URL above with FCUBSIAService.</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        IFB Account Class
+                      </label>
+                      <input
+                        type="text"
+                        value={workflowSettings.flexcubeIfbAccountClass}
+                        onChange={(e) => setWorkflowSettings({
+                          ...workflowSettings,
+                          flexcubeIfbAccountClass: e.target.value.toUpperCase(),
+                        })}
+                        placeholder="WCSA"
+                        maxLength={10}
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Account Number Code
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={workflowSettings.flexcubeIfbAccountCode}
+                        onChange={(e) => setWorkflowSettings({
+                          ...workflowSettings,
+                          flexcubeIfbAccountCode: e.target.value.replace(/\D/g, ''),
+                        })}
+                        placeholder="126"
+                        maxLength={5}
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm bg-white"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Used for IFB accounts while &quot;Use Account Product Codes&quot; is off — e.g. IFB branch 664 opens
+                    account {`664${workflowSettings.flexcubeIfbAccountCode || '126'}XXXXXXXXXX`} with class {workflowSettings.flexcubeIfbAccountClass || 'WCSA'}.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      User ID
+                    </label>
+                    <input
+                      type="text"
+                      value={workflowSettings.flexcubeUserId}
+                      onChange={(e) => setWorkflowSettings({
+                        ...workflowSettings,
+                        flexcubeUserId: e.target.value,
+                      })}
+                      placeholder="FYDA_USR"
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Source
+                    </label>
+                    <input
+                      type="text"
+                      value={workflowSettings.flexcubeSource}
+                      onChange={(e) => setWorkflowSettings({
+                        ...workflowSettings,
+                        flexcubeSource: e.target.value,
+                      })}
+                      placeholder="EXTFYDA"
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Default Branch
+                    </label>
+                    <input
+                      type="text"
+                      value={workflowSettings.flexcubeBranch}
+                      onChange={(e) => setWorkflowSettings({
+                        ...workflowSettings,
+                        flexcubeBranch: e.target.value,
+                      })}
+                      placeholder="103"
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    SOAP Timeout (ms)
+                  </label>
+                  <input
+                    type="number"
+                    value={workflowSettings.flexcubeTimeout}
+                    onChange={(e) => setWorkflowSettings({
+                      ...workflowSettings,
+                      flexcubeTimeout: parseInt(e.target.value) || 30000,
+                    })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-green-700">
+                    <span className="font-medium">Flow:</span> CreateCustomer (CIF) → CreateCustAcc (Account), or CreateIACustAcc for IFB accounts. All calls use SOAP/XML over HTTP to the FlexCube FCUBS endpoints.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -874,7 +956,7 @@ export default function SettingsPage() {
                   referralSettings.enabled ? 'bg-green-600' : 'bg-gray-200'
                 }`}
               >
-                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                <span className={`absolute left-0 top-1 w-4 h-4 bg-white rounded-full transition-transform ${
                   referralSettings.enabled ? 'translate-x-7' : 'translate-x-1'
                 }`} />
               </button>
@@ -975,7 +1057,7 @@ export default function SettingsPage() {
                       referralSettings.refereePointsEnabled ? 'bg-green-600' : 'bg-gray-200'
                     }`}
                   >
-                    <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    <span className={`absolute left-0 top-1 w-4 h-4 bg-white rounded-full transition-transform ${
                       referralSettings.refereePointsEnabled ? 'translate-x-7' : 'translate-x-1'
                     }`} />
                   </button>
@@ -1250,7 +1332,7 @@ export default function SettingsPage() {
                     }`}
                   >
                     <span
-                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                      className={`absolute left-0 top-1 w-4 h-4 bg-white rounded-full transition-transform ${
                         settings.security.twoFactor ? 'translate-x-7' : 'translate-x-1'
                       }`}
                     />
@@ -1354,7 +1436,7 @@ export default function SettingsPage() {
                   }`}
                 >
                   <span
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    className={`absolute left-0 top-1 w-4 h-4 bg-white rounded-full transition-transform ${
                       settings.notifications[item.key as keyof typeof settings.notifications]
                         ? 'translate-x-7'
                         : 'translate-x-1'

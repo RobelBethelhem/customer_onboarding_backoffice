@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
 import WorkflowSettings, { defaultWorkflowSettings } from '@/lib/models/WorkflowSettings';
-import { createCustomerAndAccount, createAccountForCIF, FlexCubeConfig, queryCustomerByCustNo } from '@/lib/flexcube';
+import { createCustomerAndAccount, createAccountForCIF, accountSetupFor, FlexCubeConfig, queryCustomerByCustNo } from '@/lib/flexcube';
 import { distributeReferralRewards } from '@/lib/referralRewards';
 import Referral from '@/lib/models/Referral';
 import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConfig';
@@ -21,6 +21,7 @@ function getFlexCubeConfig(settings: any): FlexCubeConfig {
   return {
     customerServiceUrl: settings?.flexcubeCustomerServiceUrl || 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
     accountServiceUrl: settings?.flexcubeAccountServiceUrl || 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
+    iaServiceUrl: settings?.flexcubeIaServiceUrl || undefined, // IFB accounts (FCUBSIAService)
     userId: settings?.flexcubeUserId || 'FYDA_USR',
     source: settings?.flexcubeSource || 'EXTFYDA',
     defaultBranch: settings?.flexcubeBranch || '103',
@@ -106,6 +107,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, error }, { status: httpStatus });
     };
     let generalChanges: IFieldChange[] = [];
+    let approvalNote = ''; // e.g. which FlexCube service/class an IFB account was opened with
 
     // F8: Separation of duties — only KYC officers (first level) and Senior Approvers
     // (escalated/PEP second level) may action onboarding decisions. Admin is restricted to
@@ -173,8 +175,11 @@ export async function PATCH(
       // A previous approval attempt may have created the CIF before the account failed — reuse it
       // rather than creating a second CIF for the same person.
       const existingCif = customer.isExistingCustomer ? (customer.existingCif || '') : (customer.cifNumber || '');
-      // FlexCube account class from the product catalog, once switched on in Settings
-      const accountClass = settings.useProductAccountClass && customer.accountClassCode ? customer.accountClassCode : undefined;
+      // Account class + account-number code; IFB accounts go to FlexCube's Islamic service (CreateIACustAcc)
+      const setup = accountSetupFor(
+        { isIFB: isIfbProduct(customer), accountClassCode: customer.accountClassCode, tierId: customer.tierId },
+        settings
+      );
 
       // Parse name parts
       const nameParts = customer.fullName.trim().split(/\s+/);
@@ -196,8 +201,9 @@ export async function PATCH(
               cifNumber: existingCif,
               customerName: customer.existingCifCheck?.fullName || customer.fullName,
               branchCode: customer.branchCode || flexcubeConfig.defaultBranch,
-              tierId: customer.tierId || '111',
-              accountClass,
+              tierId: setup.tierId,
+              accountClass: setup.accountClass,
+              islamic: setup.islamic,
             }, flexcubeConfig)
           : await createCustomerAndAccount({
               fullName: customer.fullName,
@@ -224,9 +230,10 @@ export async function PATCH(
               otherWealthSource: customer.otherWealthSource || '',
               annualIncome: customer.annualIncome || 0,
               branchCode: customer.branchCode || flexcubeConfig.defaultBranch,
-              tierId: customer.tierId || '111',
+              tierId: setup.tierId,
               accountTypeId: customer.accountTypeId || 'SPRI',
-              accountClass,
+              accountClass: setup.accountClass,
+              islamic: setup.islamic,
               promotionType: customer.promotionType || 'Walk in customer',
               customerSegmentation: customer.customerSegmentation || 'RETAIL CUSTOMER',
               maker: customer.maker || 'WEB_USER',
@@ -237,6 +244,7 @@ export async function PATCH(
           cifNumber = result.cifNumber;
           accountNumber = result.accountNumber;
           flexcubeMessage = result.message;
+          if (setup.islamic) approvalNote = ` — IFB account (CreateIACustAcc, class ${setup.accountClass})`;
           console.log(`[FlexCube] SUCCESS — CIF: ${cifNumber}, Account: ${accountNumber}`);
         } else {
           // FlexCube failed — return error, do NOT approve without real CIF
@@ -576,7 +584,7 @@ export async function PATCH(
 
     await logDecision(
       auditAction === 'APPROVE'
-        ? `Approved — CIF ${customer.cifNumber}, account ${customer.accountNumber}${customer.isExistingCustomer ? ' (existing CIF, account only)' : ''}`
+        ? `Approved — CIF ${customer.cifNumber}, account ${customer.accountNumber}${customer.isExistingCustomer ? ' (existing CIF, account only)' : ''}${approvalNote}`
         : auditAction === 'REJECT' ? `Rejected: ${customer.rejectionReason}`
         : auditAction === 'REVIEW' ? 'Started review'
         : auditAction === 'RETURN' ? `Returned to applicant: ${customer.returnReason}`

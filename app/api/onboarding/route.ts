@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
 import WorkflowSettings, { defaultWorkflowSettings } from '@/lib/models/WorkflowSettings';
-import { createCustomerAndAccount, FlexCubeConfig, queryCustomerByCustNo } from '@/lib/flexcube';
+import { createCustomerAndAccount, accountSetupFor, FlexCubeConfig, queryCustomerByCustNo } from '@/lib/flexcube';
 import Referral, { migrateReferralIndexes } from '@/lib/models/Referral';
 import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConfig';
 import { distributeReferralRewards } from '@/lib/referralRewards';
@@ -43,6 +43,7 @@ function getFlexCubeConfig(settings: any): FlexCubeConfig {
   return {
     customerServiceUrl: settings?.flexcubeCustomerServiceUrl || 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
     accountServiceUrl: settings?.flexcubeAccountServiceUrl || 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
+    iaServiceUrl: settings?.flexcubeIaServiceUrl || undefined, // IFB accounts (FCUBSIAService)
     userId: settings?.flexcubeUserId || 'FYDA_USR',
     source: settings?.flexcubeSource || 'EXTFYDA',
     defaultBranch: settings?.flexcubeBranch || '103',
@@ -63,6 +64,11 @@ async function callFlexCubeService(customerData: any, settings: any): Promise<{
   try {
     const config = getFlexCubeConfig(settings);
     const nameParts = (customerData.fullName || '').trim().split(/\s+/);
+    // Account class + account-number code; IFB accounts go to FlexCube's Islamic service (CreateIACustAcc)
+    const setup = accountSetupFor(
+      { isIFB: isIfbProduct(customerData), accountClassCode: customerData.accountClassCode, tierId: customerData.tierId },
+      settings
+    );
 
     const result = await createCustomerAndAccount({
       fullName: customerData.fullName || '',
@@ -87,9 +93,10 @@ async function callFlexCubeService(customerData: any, settings: any): Promise<{
       otherWealthSource: customerData.otherWealthSource || '',
       annualIncome: customerData.annualIncome || customerData.monthlyIncome || 0,
       branchCode: customerData.branchCode || config.defaultBranch,
-      tierId: customerData.tierId || '111',
+      tierId: setup.tierId,
       accountTypeId: customerData.accountTypeId || 'SPRI',
-      accountClass: settings?.useProductAccountClass && customerData.accountClassCode ? customerData.accountClassCode : undefined,
+      accountClass: setup.accountClass,
+      islamic: setup.islamic,
       promotionType: customerData.promotionType || 'Walk in customer',
       customerSegmentation: customerData.customerSegmentation || 'RETAIL CUSTOMER',
     }, config);
@@ -324,6 +331,8 @@ export async function POST(request: Request) {
             // FlexCube failed, send to manual review
             status = 'pending';
             workflowDecision = `Sent to manual review: FlexCube service failed - ${flexcubeResult.error}`;
+            // The CIF may already exist (account step failed): keep it so approval opens only the account
+            if (flexcubeResult.cifNumber) cifNumber = flexcubeResult.cifNumber;
           }
         } else {
           // FlexCube disabled, just auto approve without CIF

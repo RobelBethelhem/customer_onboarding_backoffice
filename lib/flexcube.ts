@@ -7,6 +7,7 @@
  * Flow:
  *   1. CreateCustomer (FCUBSCustomerService) → returns CUSTNO (CIF number)
  *   2. CreateCustAcc  (FCUBSAccService)       → returns ACC (account number)
+ *      IFB (interest-free) accounts: CreateIACustAcc (FCUBSIAService, Islamic Accounting module)
  *
  * Both calls use the same SOAP envelope structure with FCUBS_HEADER + FCUBS_BODY.
  */
@@ -18,6 +19,8 @@ export interface FlexCubeConfig {
   customerServiceUrl: string;
   /** SOAP endpoint URL for FCUBSAccService (Account creation) */
   accountServiceUrl: string;
+  /** SOAP endpoint URL for FCUBSIAService (IFB account creation); empty = accountServiceUrl with FCUBSIAService */
+  iaServiceUrl?: string;
   /** FlexCube user ID (e.g., 'FYDA_USR') */
   userId: string;
   /** FlexCube source identifier (e.g., 'EXTFYDA' or 'EXTIB') */
@@ -79,6 +82,7 @@ export interface CreateAccountRequest {
   accountClass: string;      // FlexCube account class (e.g., 'SPRI', 'ZCLUB')
   tierId: string;
   currency: string;          // 'ETB'
+  islamic?: boolean;         // IFB account: FCUBSIAService → CreateIACustAcc (module IA)
 }
 
 export interface CreateAccountResult {
@@ -94,6 +98,7 @@ export interface CreateAccountResult {
 export const defaultFlexCubeConfig: FlexCubeConfig = {
   customerServiceUrl: 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
   accountServiceUrl: 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
+  iaServiceUrl: 'http://10.1.1.155:7107/FCUBSIAService/FCUBSIAService',
   userId: 'FYDA_USR',
   source: 'EXTFYDA',
   defaultBranch: '103',
@@ -125,6 +130,39 @@ const ACCOUNT_CLASS_MAP: Record<string, string> = {
 
 export function getAccountClass(tierId: string): string {
   return ACCOUNT_CLASS_MAP[tierId] || 'SPRI';
+}
+
+// IFB (interest-free) accounts while the Account Products codes aren't switched on (Settings → FlexCube).
+// From the core banking team's CreateIACustAcc sample: class WCSA, account template 103126XXXXXXXXXX.
+export const DEFAULT_IFB_ACCOUNT_CLASS = 'WCSA';
+export const DEFAULT_IFB_ACCOUNT_CODE = '126';
+
+/**
+ * How FlexCube opens an application's account: through the Islamic service or not, the account
+ * class (ACCLS) and the account-number code (tierId: the digits after the branch in the ACC
+ * template, e.g. 664 126 XXXXXXXXXX).
+ * - "Use account product codes" on: class code and product number from Account Products.
+ * - Otherwise conventional accounts keep the class mapping (SPRI) and IFB accounts use the IFB
+ *   account class and code from Settings.
+ */
+export function accountSetupFor(
+  app: { isIFB: boolean; accountClassCode?: string; tierId?: string },
+  settings?: { useProductAccountClass?: boolean; flexcubeIfbAccountClass?: string; flexcubeIfbAccountCode?: string } | null
+): { islamic: boolean; accountClass: string; tierId: string } {
+  const catalogClass = settings?.useProductAccountClass ? app.accountClassCode || '' : '';
+  if (app.isIFB) {
+    const ifbCode = settings?.flexcubeIfbAccountCode || DEFAULT_IFB_ACCOUNT_CODE;
+    return catalogClass
+      ? { islamic: true, accountClass: catalogClass, tierId: app.tierId || ifbCode }
+      : { islamic: true, accountClass: settings?.flexcubeIfbAccountClass || DEFAULT_IFB_ACCOUNT_CLASS, tierId: ifbCode };
+  }
+  const tierId = app.tierId || '111';
+  return { islamic: false, accountClass: catalogClass || getAccountClass(tierId), tierId };
+}
+
+/** FCUBSIAService endpoint: as configured, else the account service URL on the same server */
+export function iaServiceUrlFor(config: FlexCubeConfig): string {
+  return config.iaServiceUrl || config.accountServiceUrl.replace(/FCUBSAccService/g, 'FCUBSIAService');
 }
 
 // ─── FlexCube LOV (List of Values) Mappings ──────────────────────────────────
@@ -545,29 +583,36 @@ function buildCreateCustomerEnvelope(data: CreateCIFRequest, config: FlexCubeCon
 }
 
 /**
- * Build SOAP envelope for CreateCustAcc (Account creation)
+ * Build SOAP envelope for account creation:
+ *   conventional        → FCUBSAccService / CreateCustAcc   (module ST)
+ *   IFB (interest-free) → FCUBSIAService  / CreateIACustAcc (module IA), as in the core banking
+ *   team's sample. Its body has no No-Debit flag, like the sample — No-Debit is set on every new
+ *   account after approval (Fayda backend /api/flexcube/set-no-debit).
  */
 function buildCreateAccountEnvelope(data: CreateAccountRequest, config: FlexCubeConfig): string {
   const correlId = generateCorrelId();
   const branch = data.branchCode || config.defaultBranch;
   const accountClass = data.accountClass || "SPRI";
   // const accountClass = '1111';
+  const svc = data.islamic
+    ? { service: 'FCUBSIAService', request: 'CREATEIACUSTACC_FSFS_REQ', module: 'IA', operation: 'CreateIACustAcc' }
+    : { service: 'FCUBSAccService', request: 'CREATECUSTACC_FSFS_REQ', module: 'ST', operation: 'CreateCustAcc' };
 
   // Account number template: BRN + 111 + XXXXXXXXXX (FlexCube will generate the full number)
   const accTemplate = `${branch}${data.tierId}XXXXXXXXXX`;
-  return `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:fcub="http://fcubs.ofss.com/service/FCUBSAccService">
+  return `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:fcub="http://fcubs.ofss.com/service/${svc.service}">
    <soapenv:Header/>
    <soapenv:Body>
-      <fcub:CREATECUSTACC_FSFS_REQ>
+      <fcub:${svc.request}>
          <fcub:FCUBS_HEADER>
                 <fcub:SOURCE>${escapeXml(config.source)}</fcub:SOURCE>
                 <fcub:UBSCOMP>FCUBS</fcub:UBSCOMP>
                 <fcub:CORRELID>${correlId}</fcub:CORRELID>
                 <fcub:BRANCH>${escapeXml(branch)}</fcub:BRANCH>
                 <fcub:USERID>${escapeXml(config.userId)}</fcub:USERID>
-                <fcub:MODULEID>ST</fcub:MODULEID>
-                <fcub:SERVICE>FCUBSAccService</fcub:SERVICE>
-                <fcub:OPERATION>CreateCustAcc</fcub:OPERATION>
+                <fcub:MODULEID>${svc.module}</fcub:MODULEID>
+                <fcub:SERVICE>${svc.service}</fcub:SERVICE>
+                <fcub:OPERATION>${svc.operation}</fcub:OPERATION>
                 <fcub:ACTION>NEW</fcub:ACTION>
                 <fcub:MSGSTAT>SUCCESS</fcub:MSGSTAT>
          </fcub:FCUBS_HEADER>
@@ -577,19 +622,19 @@ function buildCreateAccountEnvelope(data: CreateAccountRequest, config: FlexCube
                     <fcub:ACC>${escapeXml(accTemplate)}</fcub:ACC>
                     <fcub:CUSTNAME>${escapeXml(data.customerName.toUpperCase())}</fcub:CUSTNAME>
                     <fcub:CUSTNO>${escapeXml(data.cifNumber)}</fcub:CUSTNO>
-                    <fcub:ACCLS>${escapeXml(data.accountClass)}</fcub:ACCLS>
+                    <fcub:ACCLS>${escapeXml(accountClass)}</fcub:ACCLS>
                     <fcub:CCY>${escapeXml(data.currency || 'ETB')}</fcub:CCY>
                     <fcub:LOC>CIF</fcub:LOC>
                     <fcub:MEDIA>MAIL</fcub:MEDIA>
-                    <fcub:CustAcc>
-                    <fcub:ACSTATNODR>Y</fcub:ACSTATNODR>
+                    <fcub:CustAcc>${data.islamic ? '' : `
+                    <fcub:ACSTATNODR>Y</fcub:ACSTATNODR>`}
                     <fcub:Misdetails>
                        <fcub:POOLCD>ACT_OPEN</fcub:POOLCD>
                     </fcub:Misdetails>
                     </fcub:CustAcc>
             </fcub:Cust-Account-Full>
          </fcub:FCUBS_BODY>
-      </fcub:CREATECUSTACC_FSFS_REQ>
+      </fcub:${svc.request}>
    </soapenv:Body>
 </soapenv:Envelope>`;
 }
@@ -962,7 +1007,7 @@ export async function createCIF(
 
 /**
  * Step 2: Create Account in FlexCube using the CIF from step 1
- * Calls FCUBSAccService → CreateCustAcc
+ * Calls FCUBSAccService → CreateCustAcc, or for IFB accounts FCUBSIAService → CreateIACustAcc
  */
 export async function createAccount(
   data: CreateAccountRequest,
@@ -978,9 +1023,11 @@ export async function createAccount(
     console.log(`Customer: ${data.customerName}`);
     console.log(`Branch: ${data.branchCode}`);
     console.log(`Account Class: ${data.accountClass}`);
+    console.log(`Service: ${data.islamic ? 'FCUBSIAService → CreateIACustAcc (IFB)' : 'FCUBSAccService → CreateCustAcc'}`);
 
     const envelope = buildCreateAccountEnvelope(data, config);
-    const response = await callSoapService(config.accountServiceUrl, envelope, config.timeout);
+    const serviceUrl = data.islamic ? iaServiceUrlFor(config) : config.accountServiceUrl;
+    const response = await callSoapService(serviceUrl, envelope, config.timeout);
 
     if (isSuccessResponse(response)) {
       const accNo = extractXmlValue(response, 'ACC');
@@ -1018,12 +1065,14 @@ export async function createAccount(
 }
 
 /**
- * Open a new account under a CIF that already exists (CreateCustAcc only — no CreateCustomer).
- * Used for applicants who already bank with Zemen, and as step 2 of createCustomerAndAccount.
+ * Open a new account under a CIF that already exists (no CreateCustomer): CreateCustAcc, or
+ * CreateIACustAcc for IFB accounts. Used for applicants who already bank with Zemen, and as step 2
+ * of createCustomerAndAccount.
  */
 export async function createAccountForCIF(
-  // accountClass: FlexCube account class from the product catalog; default = mapping by tierId (SPRI)
-  data: { cifNumber: string; customerName: string; branchCode: string; tierId: string; accountClass?: string },
+  // accountClass: FlexCube account class (see accountSetupFor); default = mapping by tierId (SPRI)
+  // islamic: IFB account, opened through FCUBSIAService (CreateIACustAcc)
+  data: { cifNumber: string; customerName: string; branchCode: string; tierId: string; accountClass?: string; islamic?: boolean },
   config: FlexCubeConfig = defaultFlexCubeConfig
 ): Promise<CreateAccountResult> {
   // FYDA_USR doesn't have CreateCustAcc rights (GW-ROUT0008), so use IB_SER for account creation
@@ -1040,6 +1089,7 @@ export async function createAccountForCIF(
     accountClass: data.accountClass || getAccountClass(data.tierId),
     tierId: data.tierId,
     currency: 'ETB',
+    islamic: data.islamic === true,
   }, accountConfig);
 }
 
@@ -1078,6 +1128,7 @@ export async function createCustomerAndAccount(
     tierId: string;
     accountTypeId: string;
     accountClass?: string;
+    islamic?: boolean;
     promotionType?: string;
     customerSegmentation?: string;
     maker?: string;
@@ -1110,6 +1161,7 @@ export async function createCustomerAndAccount(
     branchCode: customerData.branchCode,
     tierId: customerData.tierId,
     accountClass: customerData.accountClass,
+    islamic: customerData.islamic,
   }, config);
 
   if (!accountResult.success || !accountResult.accountNumber) {

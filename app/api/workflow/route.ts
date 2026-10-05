@@ -47,6 +47,9 @@ export async function PUT(request: Request) {
       flexcubeEndpoint,
       flexcubeEnabled,
       useProductAccountClass,
+      flexcubeIaServiceUrl,
+      flexcubeIfbAccountClass,
+      flexcubeIfbAccountCode,
       // FlexCube SOAP configuration
       flexcubeCustomerServiceUrl,
       flexcubeAccountServiceUrl,
@@ -72,6 +75,22 @@ export async function PUT(request: Request) {
     if (flexcubeEndpoint !== undefined) updateData.flexcubeEndpoint = flexcubeEndpoint;
     if (flexcubeEnabled !== undefined) updateData.flexcubeEnabled = flexcubeEnabled;
     if (useProductAccountClass !== undefined) updateData.useProductAccountClass = useProductAccountClass === true;
+    // IFB accounts (FCUBSIAService); empty values fall back to the defaults
+    if (flexcubeIaServiceUrl !== undefined) updateData.flexcubeIaServiceUrl = String(flexcubeIaServiceUrl).trim();
+    if (flexcubeIfbAccountClass !== undefined) {
+      const v = String(flexcubeIfbAccountClass).trim().toUpperCase();
+      if (v && !/^[A-Z0-9]{1,10}$/.test(v)) {
+        return NextResponse.json({ success: false, error: 'IFB account class must be letters or digits (e.g. WCSA)' }, { status: 400 });
+      }
+      updateData.flexcubeIfbAccountClass = v;
+    }
+    if (flexcubeIfbAccountCode !== undefined) {
+      const v = String(flexcubeIfbAccountCode).trim();
+      if (v && !/^\d{1,5}$/.test(v)) {
+        return NextResponse.json({ success: false, error: 'IFB account number code must be digits (e.g. 126)' }, { status: 400 });
+      }
+      updateData.flexcubeIfbAccountCode = v;
+    }
     // FlexCube SOAP configuration
     if (flexcubeCustomerServiceUrl !== undefined) updateData.flexcubeCustomerServiceUrl = flexcubeCustomerServiceUrl;
     if (flexcubeAccountServiceUrl !== undefined) updateData.flexcubeAccountServiceUrl = flexcubeAccountServiceUrl;

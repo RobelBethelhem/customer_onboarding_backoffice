@@ -13,6 +13,10 @@ export interface IWorkflowSettings extends Omit<Document, '_id'> {
   // FlexCube Core Banking SOAP Configuration
   flexcubeEnabled: boolean;
   useProductAccountClass: boolean; // open accounts with the catalog's class code (ZDAC, DBSV…) instead of SPRI
+  // Interest-free (IFB) accounts are opened through FCUBSIAService → CreateIACustAcc
+  flexcubeIaServiceUrl: string;    // '' = the Account Service URL with FCUBSIAService
+  flexcubeIfbAccountClass: string; // IFB account class while useProductAccountClass is off (WCSA)
+  flexcubeIfbAccountCode: string;  // its account-number code: ACC template BRN + code + XXXXXXXXXX (126)
   flexcubeCustomerServiceUrl: string;
   flexcubeAccountServiceUrl: string;
   flexcubeUserId: string;
@@ -58,6 +62,18 @@ const WorkflowSettingsSchema = new Schema<IWorkflowSettings>({
   useProductAccountClass: {
     type: Boolean,
     default: false,
+  },
+  flexcubeIaServiceUrl: {
+    type: String,
+    default: '',
+  },
+  flexcubeIfbAccountClass: {
+    type: String,
+    default: 'WCSA',
+  },
+  flexcubeIfbAccountCode: {
+    type: String,
+    default: '126',
   },
   flexcubeEnabled: {
     type: Boolean,
@@ -112,6 +128,9 @@ export const defaultWorkflowSettings: Partial<IWorkflowSettings> = {
   notifyOnManualRequired: true,
   flexcubeEnabled: true,
   useProductAccountClass: false,
+  flexcubeIaServiceUrl: '',
+  flexcubeIfbAccountClass: 'WCSA',
+  flexcubeIfbAccountCode: '126',
   flexcubeCustomerServiceUrl: 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
   flexcubeAccountServiceUrl: 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
   flexcubeUserId: 'FYDA_USR',
