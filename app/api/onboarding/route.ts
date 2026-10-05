@@ -12,6 +12,7 @@ import { normalizeServices, servicesInProgressSmsLine } from '@/lib/services';
 import { audit, SYSTEM_ACTOR } from '@/lib/audit';
 import { isIfbProduct } from '@/lib/ifbBranchRules';
 import { ifbBranchFor } from '@/lib/ifbBranches';
+import { findAccountClass } from '@/lib/accountProducts';
 
 // Run referral index migration once on first request
 let referralIndexesMigrated = false;
@@ -88,6 +89,7 @@ async function callFlexCubeService(customerData: any, settings: any): Promise<{
       branchCode: customerData.branchCode || config.defaultBranch,
       tierId: customerData.tierId || '111',
       accountTypeId: customerData.accountTypeId || 'SPRI',
+      accountClass: settings?.useProductAccountClass && customerData.accountClassCode ? customerData.accountClassCode : undefined,
       promotionType: customerData.promotionType || 'Walk in customer',
       customerSegmentation: customerData.customerSegmentation || 'RETAIL CUSTOMER',
     }, config);
@@ -130,6 +132,17 @@ export async function POST(request: Request) {
         success: false,
         error: `Missing required fields: ${missingFields.join(', ')}`,
       }, { status: 400 });
+    }
+
+    // Account product catalog (Account Products page): the web app sends the product id as
+    // accountTypeId and the class code as tierName; take code, name, rate and IFB flag from the catalog.
+    const catalog = await findAccountClass(String(body.accountTypeId || ''), String(body.tierName || ''));
+    if (catalog) {
+      body.isIFB = catalog.product.isIFB;
+      body.accountClassCode = catalog.accountClass.code;
+      body.accountClassName = catalog.accountClass.name;
+      body.tierId = catalog.accountClass.productNumber || body.tierId;
+      body.tierInterestRate = catalog.accountClass.interestRate ?? 0;
     }
 
     // Interest-free (IFB) accounts are opened in the IFB counterpart of the branch the applicant
@@ -353,6 +366,9 @@ export async function POST(request: Request) {
       tierId: body.tierId,
       tierName: body.tierName,
       tierInterestRate: body.tierInterestRate,
+      accountClassCode: body.accountClassCode || '',
+      accountClassName: body.accountClassName || '',
+      isIFB: body.isIFB === true,
       uin: body.uin,
       fcn: body.fcn,
       gender: body.gender,

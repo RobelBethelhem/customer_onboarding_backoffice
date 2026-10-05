@@ -9,7 +9,8 @@ export function suggestIfbCode(conventionalCode: string): string {
   return swap ? swap + conventionalCode.slice(1) : '';
 }
 
-/** Interest-free product, from the account type the web app sent (e.g. "Z-Digital IFB", "IFB Saving") */
-export function isIfbProduct(c: { accountTypeId?: string; accountTypeName?: string; accountType?: string }): boolean {
+/** Interest-free product: the catalog's IFB flag, or (older applications) "IFB" in the account type name */
+export function isIfbProduct(c: { isIFB?: boolean; accountTypeId?: string; accountTypeName?: string; accountType?: string }): boolean {
+  if (c.isIFB === true) return true;
   return /\bIFB\b/i.test(`${c.accountTypeId || ''} ${c.accountTypeName || ''} ${c.accountType || ''}`);
 }

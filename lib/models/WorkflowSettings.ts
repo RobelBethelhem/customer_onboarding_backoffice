@@ -12,6 +12,7 @@ export interface IWorkflowSettings extends Omit<Document, '_id'> {
   notifyOnManualRequired: boolean;
   // FlexCube Core Banking SOAP Configuration
   flexcubeEnabled: boolean;
+  useProductAccountClass: boolean; // open accounts with the catalog's class code (ZDAC, DBSV…) instead of SPRI
   flexcubeCustomerServiceUrl: string;
   flexcubeAccountServiceUrl: string;
   flexcubeUserId: string;
@@ -54,6 +55,10 @@ const WorkflowSettingsSchema = new Schema<IWorkflowSettings>({
     default: true,
   },
   // FlexCube Core Banking SOAP Configuration
+  useProductAccountClass: {
+    type: Boolean,
+    default: false,
+  },
   flexcubeEnabled: {
     type: Boolean,
     default: true,
@@ -106,6 +111,7 @@ export const defaultWorkflowSettings: Partial<IWorkflowSettings> = {
   notifyOnAutoApproval: true,
   notifyOnManualRequired: true,
   flexcubeEnabled: true,
+  useProductAccountClass: false,
   flexcubeCustomerServiceUrl: 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
   flexcubeAccountServiceUrl: 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
   flexcubeUserId: 'FYDA_USR',

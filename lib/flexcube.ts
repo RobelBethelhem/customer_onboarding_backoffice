@@ -1022,7 +1022,8 @@ export async function createAccount(
  * Used for applicants who already bank with Zemen, and as step 2 of createCustomerAndAccount.
  */
 export async function createAccountForCIF(
-  data: { cifNumber: string; customerName: string; branchCode: string; tierId: string },
+  // accountClass: FlexCube account class from the product catalog; default = mapping by tierId (SPRI)
+  data: { cifNumber: string; customerName: string; branchCode: string; tierId: string; accountClass?: string },
   config: FlexCubeConfig = defaultFlexCubeConfig
 ): Promise<CreateAccountResult> {
   // FYDA_USR doesn't have CreateCustAcc rights (GW-ROUT0008), so use IB_SER for account creation
@@ -1036,7 +1037,7 @@ export async function createAccountForCIF(
     cifNumber: data.cifNumber,
     customerName: data.customerName,
     branchCode: data.branchCode || config.defaultBranch,
-    accountClass: getAccountClass(data.tierId),
+    accountClass: data.accountClass || getAccountClass(data.tierId),
     tierId: data.tierId,
     currency: 'ETB',
   }, accountConfig);
@@ -1076,6 +1077,7 @@ export async function createCustomerAndAccount(
     branchCode: string;
     tierId: string;
     accountTypeId: string;
+    accountClass?: string;
     promotionType?: string;
     customerSegmentation?: string;
     maker?: string;
@@ -1107,6 +1109,7 @@ export async function createCustomerAndAccount(
     customerName: customerData.fullName,
     branchCode: customerData.branchCode,
     tierId: customerData.tierId,
+    accountClass: customerData.accountClass,
   }, config);
 
   if (!accountResult.success || !accountResult.accountNumber) {

@@ -344,6 +344,7 @@ export default function CustomerDetailPage() {
       ['UIN', customer.uin || '-'],
       ['FCN', customer.fcn || '-'],
       ['Account Type', customer.accountTypeName || customer.accountType],
+      ['Account Class', customer.accountClassCode ? `${customer.accountClassName || customer.tierName} (${customer.accountClassCode})` : (customer.tierName || '-')],
       ['Status', getStatusLabel(customer.status)],
       ['CIF Number', customer.cifNumber || '-'],
       ['Account Number', customer.accountNumber || '-'],
@@ -1056,7 +1057,16 @@ export default function CustomerDetailPage() {
             <div className="space-y-4">
               <InfoItem label="Account Type" value={customer.accountTypeName || customer.accountType} />
               <InfoItem label="Account Type ID" value={customer.accountTypeId} />
-              {customer.tierName && (
+              {customer.accountClassCode ? (
+                <>
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Account Class</p>
+                  </div>
+                  <InfoItem label="Account Class" value={customer.accountClassName || customer.tierName || ''} />
+                  <InfoItem label="Code" value={customer.accountClassCode} />
+                  <InfoItem label="Interest Rate" value={customer.isIFB ? 'Interest-free (IFB)' : `${customer.tierInterestRate || 0}% p.a.`} />
+                </>
+              ) : customer.tierName && (
                 <>
                   <div className="pt-2 border-t">
                     <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Account Tier</p>

@@ -15,6 +15,9 @@ export interface Customer {
   tierId?: string;
   tierName?: string;
   tierInterestRate?: number;
+  accountClassCode?: string;
+  accountClassName?: string;
+  isIFB?: boolean;
   status: 'pending' | 'verified' | 'approved' | 'rejected' | 'auto_approved' | 'escalated' | 'returned' | 'in_review';
   channel?: 'mobile_app' | 'web' | 'whatsapp' | 'telegram' | 'superapp' | 'other';
   faceVideoId?: string;

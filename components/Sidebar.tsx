@@ -20,6 +20,7 @@ import {
   Users,
   Smartphone,
   History,
+  Package,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth, UserRole } from './AuthProvider';
@@ -45,6 +46,7 @@ const menuItems: MenuItem[] = [
   { name: 'Service Requests', href: '/services', icon: Smartphone, servicesBadge: true, roles: ['admin', 'personal_banker'] },
   { name: 'Executive Review', href: '/executive-review', icon: TrendingUp, divider: true, roles: ['admin', 'kyc'] },
   { name: 'Referral Program', href: '/referrals', icon: Gift, roles: ['admin', 'marketing'] },
+  { name: 'Account Products', href: '/products', icon: Package, roles: ['admin', 'kyc'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin', 'kyc', 'marketing'] },
   { name: 'User Management', href: '/users', icon: Users, roles: ['admin'] },
   { name: 'Audit Log', href: '/audit-logs', icon: History, roles: ['admin'] },

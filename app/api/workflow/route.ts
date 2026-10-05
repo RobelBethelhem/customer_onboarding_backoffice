@@ -46,6 +46,7 @@ export async function PUT(request: Request) {
       notifyOnManualRequired,
       flexcubeEndpoint,
       flexcubeEnabled,
+      useProductAccountClass,
       // FlexCube SOAP configuration
       flexcubeCustomerServiceUrl,
       flexcubeAccountServiceUrl,
@@ -70,6 +71,7 @@ export async function PUT(request: Request) {
     if (notifyOnManualRequired !== undefined) updateData.notifyOnManualRequired = notifyOnManualRequired;
     if (flexcubeEndpoint !== undefined) updateData.flexcubeEndpoint = flexcubeEndpoint;
     if (flexcubeEnabled !== undefined) updateData.flexcubeEnabled = flexcubeEnabled;
+    if (useProductAccountClass !== undefined) updateData.useProductAccountClass = useProductAccountClass === true;
     // FlexCube SOAP configuration
     if (flexcubeCustomerServiceUrl !== undefined) updateData.flexcubeCustomerServiceUrl = flexcubeCustomerServiceUrl;
     if (flexcubeAccountServiceUrl !== undefined) updateData.flexcubeAccountServiceUrl = flexcubeAccountServiceUrl;

@@ -17,6 +17,7 @@ interface WorkflowSettings {
   notifyOnAutoApproval: boolean;
   notifyOnManualRequired: boolean;
   flexcubeEnabled: boolean;
+  useProductAccountClass: boolean;
   flexcubeCustomerServiceUrl: string;
   flexcubeAccountServiceUrl: string;
   flexcubeUserId: string;
@@ -60,6 +61,7 @@ const defaultWorkflowSettings: WorkflowSettings = {
   notifyOnAutoApproval: true,
   notifyOnManualRequired: true,
   flexcubeEnabled: true,
+  useProductAccountClass: false,
   flexcubeCustomerServiceUrl: 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
   flexcubeAccountServiceUrl: 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
   flexcubeUserId: 'FYDA_USR',
@@ -133,6 +135,7 @@ export default function SettingsPage() {
           notifyOnAutoApproval: data.data.notifyOnAutoApproval ?? true,
           notifyOnManualRequired: data.data.notifyOnManualRequired ?? true,
           flexcubeEnabled: data.data.flexcubeEnabled ?? true,
+          useProductAccountClass: data.data.useProductAccountClass === true,
           flexcubeCustomerServiceUrl: data.data.flexcubeCustomerServiceUrl || 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
           flexcubeAccountServiceUrl: data.data.flexcubeAccountServiceUrl || 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
           flexcubeUserId: data.data.flexcubeUserId || 'FYDA_USR',
@@ -584,6 +587,31 @@ export default function SettingsPage() {
                       <span
                         className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
                           workflowSettings.flexcubeEnabled ? 'translate-x-7' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between py-3">
+                    <div>
+                      <p className="font-medium text-gray-900">Use Account Product Codes as Account Class</p>
+                      <p className="text-sm text-gray-500">
+                        Open accounts with the class code from Account Products (ZDAC, DBSV, DWAD…). Turn on only once these
+                        classes exist in FlexCube — when off, accounts are opened with the default class (SPRI).
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setWorkflowSettings({
+                        ...workflowSettings,
+                        useProductAccountClass: !workflowSettings.useProductAccountClass,
+                      })}
+                      className={`relative w-12 h-6 shrink-0 ml-4 rounded-full transition-colors ${
+                        workflowSettings.useProductAccountClass ? 'bg-green-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                          workflowSettings.useProductAccountClass ? 'translate-x-7' : 'translate-x-1'
                         }`}
                       />
                     </button>

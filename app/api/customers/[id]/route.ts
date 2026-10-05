@@ -170,7 +170,11 @@ export async function PATCH(
         }
       }
       // Existing customer: their CIF already exists, so only a new account is opened under it
-      const existingCif = customer.isExistingCustomer ? (customer.existingCif || '') : '';
+      // A previous approval attempt may have created the CIF before the account failed — reuse it
+      // rather than creating a second CIF for the same person.
+      const existingCif = customer.isExistingCustomer ? (customer.existingCif || '') : (customer.cifNumber || '');
+      // FlexCube account class from the product catalog, once switched on in Settings
+      const accountClass = settings.useProductAccountClass && customer.accountClassCode ? customer.accountClassCode : undefined;
 
       // Parse name parts
       const nameParts = customer.fullName.trim().split(/\s+/);
@@ -193,6 +197,7 @@ export async function PATCH(
               customerName: customer.existingCifCheck?.fullName || customer.fullName,
               branchCode: customer.branchCode || flexcubeConfig.defaultBranch,
               tierId: customer.tierId || '111',
+              accountClass,
             }, flexcubeConfig)
           : await createCustomerAndAccount({
               fullName: customer.fullName,
@@ -221,6 +226,7 @@ export async function PATCH(
               branchCode: customer.branchCode || flexcubeConfig.defaultBranch,
               tierId: customer.tierId || '111',
               accountTypeId: customer.accountTypeId || 'SPRI',
+              accountClass,
               promotionType: customer.promotionType || 'Walk in customer',
               customerSegmentation: customer.customerSegmentation || 'RETAIL CUSTOMER',
               maker: customer.maker || 'WEB_USER',

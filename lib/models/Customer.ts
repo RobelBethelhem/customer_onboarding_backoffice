@@ -49,6 +49,9 @@ export interface ICustomer extends Document {
   tierId?: string;
   tierName?: string;
   tierInterestRate?: number;
+  accountClassCode?: string;  // catalog code, e.g. 'DBSV' (Account Products page)
+  accountClassName?: string;
+  isIFB?: boolean;            // interest-free product
   status: 'pending' | 'verified' | 'approved' | 'rejected' | 'auto_approved' | 'escalated' | 'returned' | 'in_review';
   channel: CustomerChannel;
   faceVideoId?: string;
@@ -182,6 +185,9 @@ const CustomerSchema = new Schema<ICustomer>({
   tierId: { type: String, default: '' },
   tierName: { type: String, default: '' },
   tierInterestRate: { type: Number, default: 0 },
+  accountClassCode: { type: String, default: '' },
+  accountClassName: { type: String, default: '' },
+  isIFB: { type: Boolean, default: false },
   status: {
     type: String,
     enum: ['pending', 'verified', 'approved', 'rejected', 'auto_approved', 'escalated', 'returned', 'in_review'],

@@ -27,6 +27,7 @@ function isPublicApiRoute(method: string, pathname: string): boolean {
   if (pathname === '/api/screening/check' && method === 'POST') return true;
   if (pathname.startsWith('/api/applications/status') && method === 'GET') return true;
   if (pathname === '/api/branches' && method === 'GET') return true; // branch list for the web app
+  if (pathname === '/api/account-products' && method === 'GET') return true; // product catalog for the web app
   if (pathname === '/api/referrals/verify' && method === 'POST') return true;
   if (
     pathname.startsWith('/api/referrals/') &&
@@ -58,6 +59,7 @@ function checkPageAccess(role: string, path: string): boolean {
     if (path === '/sanctions' || path.startsWith('/sanctions/')) return false;
     if (path === '/services' || path.startsWith('/services/')) return false;
     if (path === '/audit-logs' || path.startsWith('/audit-logs/')) return false;
+    if (role === 'senior_approver' && (path === '/products' || path.startsWith('/products/'))) return false;
     return true;
   }
 
