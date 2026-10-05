@@ -23,18 +23,12 @@ export const maxDuration = 60; // seconds
 export const dynamic = 'force-dynamic';
 
 // Generate unique customer ID
+// Next Application ID: one above the highest number in use (not the newest record — creation
+// order and ID order can differ, which gave an ID that already exists → duplicate key → 500)
 async function generateCustomerId(): Promise<string> {
-  const lastCustomer = await Customer.findOne().sort({ createdAt: -1 });
-  let nextNum = 1;
-
-  if (lastCustomer && lastCustomer.customerId) {
-    const match = lastCustomer.customerId.match(/ZMN-(\d+)/);
-    if (match) {
-      nextNum = parseInt(match[1], 10) + 1;
-    }
-  }
-
-  return `ZMN-${String(nextNum).padStart(5, '0')}`;
+  const ids = await Customer.find({ customerId: /^ZMN-\d+$/ }).select('customerId -_id').lean() as { customerId: string }[];
+  const top = ids.reduce((max, c) => Math.max(max, parseInt(c.customerId.slice(4), 10) || 0), 0);
+  return `ZMN-${String(top + 1).padStart(5, '0')}`;
 }
 
 /**
@@ -256,7 +250,7 @@ export async function POST(request: Request) {
       : null;
 
     // Generate customer ID (reuse the existing one when amending a returned/rejected application)
-    const customerId = existingApp ? existingApp.customerId : await generateCustomerId();
+    let customerId = existingApp ? existingApp.customerId : await generateCustomerId();
 
     // Determine channel — defaults to 'mobile_app' for backward compatibility
     const validChannels = ['mobile_app', 'web', 'whatsapp', 'telegram', 'superapp', 'other'];
@@ -600,7 +594,18 @@ export async function POST(request: Request) {
       customer = await existingApp.save();
       console.log(`[Resubmit] Amended existing application ${customerId} (resubmission #${existingApp.resubmissionCount})`);
     } else {
-      customer = await Customer.create(customerData);
+      // Two submissions at the same moment can pick the same ID: take the next one and retry
+      for (let attempt = 1; ; attempt++) {
+        try {
+          customer = await Customer.create(customerData);
+          break;
+        } catch (e: any) {
+          if (e?.code !== 11000 || !e?.keyPattern?.customerId || attempt >= 3) throw e;
+          customerId = await generateCustomerId();
+          customerData.customerId = customerId;
+          console.warn(`[Onboarding] Application ID taken, retrying as ${customerId}`);
+        }
+      }
     }
 
     // Audit trail: the applicant's submission and, if it happened, the system's auto-approval
@@ -771,11 +776,13 @@ export async function POST(request: Request) {
       },
     }, { status: 201 });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Onboarding error:', error);
     return NextResponse.json({
       success: false,
       error: 'Failed to process onboarding request',
+      // the actual reason, so the Fayda backend's log shows it (this route is called by that server)
+      detail: String(error?.message || error).slice(0, 500),
     }, { status: 500 });
   }
 }
