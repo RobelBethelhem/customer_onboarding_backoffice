@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import CorporateCatalogSettings, {
-  ICorporateCategory, ICorporateDocumentType, ICorporateRules, ICorporateSubtype,
+  ICorporateAccountRule, ICorporateCategory, ICorporateDocumentType, ICorporateRules, ICorporateSubtype,
 } from '@/lib/models/CorporateCatalog';
+import { getAccountProducts } from '@/lib/accountProducts';
 import { requireRole } from '@/lib/apiAuth';
 import { audit } from '@/lib/audit';
 import { defaultCorporateCategories, getCorporateCatalog } from '@/lib/corporateCatalog';
@@ -62,6 +63,11 @@ export async function PUT(request: NextRequest) {
     if (!Array.isArray(body.categories)) return bad('categories must be a list');
     if (body.categories.length > 30) return bad('At most 30 categories');
 
+    // Account classes organizations can open (Account Products with audience organization / both)
+    const orgClasses = new Set<string>((await getAccountProducts())
+      .filter(p => ['organization', 'both'].includes(p.audience || 'individual'))
+      .flatMap(p => p.classes.map(cl => cl.code)));
+
     const categories: ICorporateCategory[] = [];
     const categoryIds = new Set<string>();
     for (const c of body.categories) {
@@ -94,7 +100,21 @@ export async function PUT(request: NextRequest) {
           active: d?.active !== false,
         });
       }
-      categories.push({ id, name, description: str(c?.description, 400), subtypes, documents, active: c?.active !== false });
+      const accountsLimited = c?.accountsLimited === true;
+      const accounts: ICorporateAccountRule[] = [];
+      if (accountsLimited) {
+        for (const a of Array.isArray(c?.accounts) ? c.accounts : []) {
+          const classCode = str(a?.classCode, 10).toUpperCase();
+          if (!orgClasses.has(classCode)) return bad(`${name}: ${classCode || 'an account class'} is not an account for organizations (Account Products)`);
+          if (accounts.some(x => x.classCode === classCode)) continue;
+          accounts.push({
+            classCode,
+            subtypes: Array.isArray(a?.subtypes) ? Array.from(new Set<string>(a.subtypes.map(String))).filter(sid => subtypeIds.has(sid)) : [],
+          });
+        }
+        if (!accounts.length) return bad(`${name}: tick at least one account it can open, or choose "All accounts for organizations"`);
+      }
+      categories.push({ id, name, description: str(c?.description, 400), subtypes, documents, accountsLimited, accounts, active: c?.active !== false });
     }
     if (!categories.some(c => c.active)) return bad('Keep at least one category active');
 
@@ -114,6 +134,9 @@ export async function PUT(request: NextRequest) {
         ...c.subtypes.map(s => [`${c.id} / sub-type ${s.id}`, `${s.name} · ${s.active ? 'active' : 'inactive'}`] as [string, string]),
         ...c.documents.map((d, di) => [`${c.id} / document ${d.id}`,
           `#${di + 1} ${d.name} · ${d.required ? 'required' : 'optional'}${d.subtypes.length ? ` · only ${d.subtypes.join(', ')}` : ''} · ${d.active ? 'active' : 'inactive'}`] as [string, string]),
+        [`${c.id} / accounts`, c.accountsLimited
+          ? (c.accounts || []).map(a => `${a.classCode}${a.subtypes.length ? ` (only ${a.subtypes.join(', ')})` : ''}`).join(', ')
+          : 'all accounts for organizations'] as [string, string],
       ]),
       ['rule maxPeople', String(rl.maxPeople)], ['rule maxFileMb', String(rl.maxFileMb)],
       ['rule inviteValidDays', String(rl.inviteValidDays)], ['rule signatureRequired', String(rl.signatureRequired)],
@@ -131,7 +154,7 @@ export async function PUT(request: NextRequest) {
       await audit(request, {
         module: 'SETTINGS', action: 'UPDATE', entityType: 'CorporateCatalog', entityId: 'default',
         entityName: 'Business account documents', changes,
-        description: `Changed business account categories, documents or rules (${changes.length} item${changes.length === 1 ? '' : 's'})`,
+        description: `Changed business account categories, documents, accounts or rules (${changes.length} item${changes.length === 1 ? '' : 's'})`,
       });
     }
     return NextResponse.json({ success: true, data: { categories, rules } });

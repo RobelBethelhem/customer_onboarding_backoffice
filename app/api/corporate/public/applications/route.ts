@@ -4,7 +4,7 @@ import CorporateApplication, {
   CorporateRole, ICorporateAddress, ICorporatePerson, SigningRule,
 } from '@/lib/models/CorporateApplication';
 import CorporateVerification, { ICorporateVerification } from '@/lib/models/CorporateVerification';
-import { getCorporateCatalog, documentsFor } from '@/lib/corporateCatalog';
+import { getCorporateCatalog, documentsFor, accountClassesFor } from '@/lib/corporateCatalog';
 import { findAccountClass } from '@/lib/accountProducts';
 import { getBranches, ifbBranchFor } from '@/lib/ifbBranches';
 import { verifyIdentity } from '@/lib/faydaTokens';
@@ -105,6 +105,10 @@ export async function POST(request: Request) {
       && ['organization', 'both'].includes(catalogEntry.product.audience || 'individual');
     if (!catalogEntry || !offered) return bad('Choose an account type for organizations');
     const { product, accountClass } = catalogEntry;
+    const allowedClasses = accountClassesFor(category, subtype?.id || '');
+    if (allowedClasses && !allowedClasses.includes(accountClass.code)) {
+      return bad(`${product.name} — ${accountClass.name} is not offered for ${subtype?.name || category.name}. Please choose another account type.`);
+    }
 
     // ── People ──────────────────────────────────────────────────────────────────────────────
     const a = body.applicant || {};

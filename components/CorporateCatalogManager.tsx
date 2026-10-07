@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Save, Loader2, AlertTriangle, CheckCircle2, RotateCcw, Building2,
+  Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Save, Loader2, AlertTriangle, CheckCircle2, RotateCcw, Building2, Wallet,
 } from 'lucide-react';
 
 interface Subtype { id: string; name: string; active: boolean }
 interface DocumentType { id: string; name: string; description: string; required: boolean; subtypes: string[]; active: boolean }
-interface Category { id: string; name: string; description: string; subtypes: Subtype[]; documents: DocumentType[]; active: boolean }
+interface AccountRule { classCode: string; subtypes: string[] }
+interface Category {
+  id: string; name: string; description: string; subtypes: Subtype[]; documents: DocumentType[];
+  accountsLimited?: boolean; accounts?: AccountRule[]; active: boolean;
+}
+// Account Products for organizations (audience organization / both), to choose from
+interface OrgProduct { id: string; name: string; isIFB: boolean; active: boolean; classes: { code: string; name: string; active?: boolean }[] }
 interface Rules { maxPeople: number | string; maxFileMb: number | string; signatureRequired: boolean; inviteValidDays: number | string }
 
 function move<T>(list: T[], index: number, delta: number): T[] {
@@ -56,9 +62,15 @@ export default function CorporateCatalogManager() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+  const [orgProducts, setOrgProducts] = useState<OrgProduct[]>([]);
 
   const load = async () => {
     setLoading(true);
+    // the accounts each kind of organization can open are chosen from Account Products
+    fetch('/api/account-products/manage', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => setOrgProducts((d?.data?.products || []).filter((p: any) => ['organization', 'both'].includes(p.audience || 'individual'))))
+      .catch(() => setOrgProducts([]));
     try {
       const res = await fetch('/api/corporate/catalog', { cache: 'no-store' });
       const data = await res.json();
@@ -131,7 +143,8 @@ export default function CorporateCatalogManager() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-sm text-gray-500">
           The kinds of organization that can open an account in the web app and the documents each one uploads.
-          Every signatory and director verifies with Fayda through an SMS link, so their IDs are not uploaded.
+          Every signatory and director verifies with Fayda (with the applicant, or from an SMS link), so their IDs are not uploaded.
+          For each kind you can also choose which account types it can open.
           {meta.updatedAt && <> Last changed {new Date(meta.updatedAt).toLocaleString()}{meta.updatedBy ? ` by ${meta.updatedBy}` : ''}.</>}
         </p>
         <div className="flex flex-wrap gap-2">
@@ -182,6 +195,12 @@ export default function CorporateCatalogManager() {
       {categories.map((c, ci) => {
         const expanded = open.has(ci);
         const activeDocs = c.documents.filter(d => d.active).length;
+        const rules = c.accounts || [];
+        const setRules = (next: AccountRule[]) => setCategory(ci, { accounts: next });
+        const toggleClass = (code: string) => setRules(rules.some(a => a.classCode === code)
+          ? rules.filter(a => a.classCode !== code) : [...rules, { classCode: code, subtypes: [] }]);
+        const toggleRuleSubtype = (code: string, sid: string) => setRules(rules.map(a => (a.classCode !== code ? a
+          : { ...a, subtypes: a.subtypes.includes(sid) ? a.subtypes.filter(x => x !== sid) : [...a.subtypes, sid] })));
         return (
           <div key={ci} className={`bg-white rounded-xl border border-gray-200 shadow-sm ${c.active ? '' : 'opacity-60'}`}>
             <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-4 bg-gray-50 rounded-t-xl border-b">
@@ -198,7 +217,9 @@ export default function CorporateCatalogManager() {
                 <input className={input} value={c.description} placeholder="Short description (shown to applicants)" onChange={e => setCategory(ci, { description: e.target.value })} />
               </div>
               <div className="flex items-center gap-4">
-                <span className="text-xs text-gray-500 whitespace-nowrap">{c.subtypes.length} sub-types · {activeDocs} documents</span>
+                <span className="text-xs text-gray-500 whitespace-nowrap">
+                  {c.subtypes.length} sub-types · {activeDocs} documents · {c.accountsLimited ? `${rules.length} account type${rules.length === 1 ? '' : 's'}` : 'all accounts'}
+                </span>
                 <span className="flex items-center gap-2 text-sm text-gray-700">
                   <Toggle on={c.active} onChange={() => setCategory(ci, { active: !c.active })} label="Active" /> {c.active ? 'Active' : 'Inactive'}
                 </span>
@@ -223,6 +244,7 @@ export default function CorporateCatalogManager() {
                           onClick={() => setCategory(ci, {
                             subtypes: c.subtypes.filter((_, i) => i !== si),
                             documents: c.documents.map(d => ({ ...d, subtypes: d.subtypes.filter(id => id !== s.id) })),
+                            accounts: rules.map(a => ({ ...a, subtypes: a.subtypes.filter(id => id !== s.id) })),
                           })}
                           className="text-gray-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
@@ -285,6 +307,75 @@ export default function CorporateCatalogManager() {
                 </div>
                 <button type="button" onClick={() => setCategory(ci, { documents: [...c.documents, emptyDocument()] })}
                   className="inline-flex items-center gap-1.5 text-sm text-green-700 hover:text-green-900 font-medium"><Plus className="w-4 h-4" /> Add document</button>
+
+                {/* Account types this kind of organization can open */}
+                <div className="border-t pt-4">
+                  <p className="text-sm font-medium text-gray-900 mb-2 flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-indigo-500" /> Account types they can open
+                    <span className="text-gray-500 font-normal">— the web app offers only these at the Account step</span>
+                  </p>
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-700 mb-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" className="accent-green-600" checked={!c.accountsLimited}
+                        onChange={() => setCategory(ci, { accountsLimited: false })} />
+                      All accounts for organizations
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" className="accent-green-600" checked={!!c.accountsLimited}
+                        onChange={() => setCategory(ci, { accountsLimited: true, accounts: rules })} />
+                      Only the ones ticked below
+                    </label>
+                  </div>
+                  {c.accountsLimited && (orgProducts.length === 0 ? (
+                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      No account product is marked “For organizations” yet — set the audience in the Account Products tab first.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      {orgProducts.map(p => (
+                        <div key={p.id} className={`border border-gray-200 rounded-lg p-3 ${p.active ? '' : 'bg-gray-50'}`}>
+                          <p className="text-sm font-semibold text-gray-900 flex items-center gap-2 flex-wrap mb-1">
+                            {p.name}
+                            {p.isIFB && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-800">IFB</span>}
+                            {!p.active && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-200 text-gray-600">inactive product</span>}
+                          </p>
+                          {p.classes.map(cl => {
+                            const rule = rules.find(a => a.classCode === cl.code);
+                            const subs = c.subtypes.filter(s => s.id);
+                            return (
+                              <div key={cl.code} className="py-1.5 border-b last:border-0 border-gray-100">
+                                <label className="flex items-center gap-2 text-sm text-gray-800 cursor-pointer">
+                                  <input type="checkbox" className="accent-green-600" checked={!!rule} onChange={() => toggleClass(cl.code)} />
+                                  <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-gray-100">{cl.code}</span>
+                                  <span className={cl.active === false ? 'text-gray-400 line-through' : ''}>{cl.name}</span>
+                                </label>
+                                {rule && subs.length > 0 && (
+                                  <div className="ml-6 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-700">
+                                    <span className="text-gray-500">Only for:</span>
+                                    {subs.map(s => (
+                                      <label key={s.id} className="flex items-center gap-1 cursor-pointer">
+                                        <input type="checkbox" className="accent-green-600" checked={rule.subtypes.includes(s.id)}
+                                          onChange={() => toggleRuleSubtype(cl.code, s.id)} />
+                                        {s.name}
+                                      </label>
+                                    ))}
+                                    {rule.subtypes.length === 0 && <span className="text-gray-400">none ticked = all sub-types</span>}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {c.accountsLimited && rules.some(a => !orgProducts.some(p => p.classes.some(cl => cl.code === a.classCode))) && orgProducts.length > 0 && (
+                    <p className="text-xs text-amber-700 mt-2">
+                      {rules.filter(a => !orgProducts.some(p => p.classes.some(cl => cl.code === a.classCode))).map(a => a.classCode).join(', ')}: no longer
+                      an account for organizations — untick it or set its product’s audience again.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

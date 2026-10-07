@@ -17,6 +17,13 @@ export interface ICorporateSubtype {
   active: boolean;
 }
 
+// An account class (Account Products, for organizations) this kind of organization can open;
+// `subtypes` limits it to some sub-types, like documents (empty = every sub-type)
+export interface ICorporateAccountRule {
+  classCode: string;
+  subtypes: string[];
+}
+
 // A kind of organization (KYC procedure 2.3.2–2.3.6), e.g. "Business organization"
 export interface ICorporateCategory {
   id: string;
@@ -24,6 +31,9 @@ export interface ICorporateCategory {
   description: string;
   subtypes: ICorporateSubtype[];
   documents: ICorporateDocumentType[];
+  // Which accounts it can open: off (missing) = every account for organizations; on = only `accounts`
+  accountsLimited?: boolean;
+  accounts?: ICorporateAccountRule[];
   active: boolean;
 }
 
@@ -58,12 +68,19 @@ const SubtypeSchema = new Schema<ICorporateSubtype>({
   active: { type: Boolean, default: true },
 }, { _id: false });
 
+const AccountRuleSchema = new Schema<ICorporateAccountRule>({
+  classCode: { type: String, required: true },
+  subtypes: { type: [String], default: [] },
+}, { _id: false });
+
 const CategorySchema = new Schema<ICorporateCategory>({
   id: { type: String, required: true },
   name: { type: String, required: true },
   description: { type: String, default: '' },
   subtypes: { type: [SubtypeSchema], default: [] },
   documents: { type: [DocumentTypeSchema], default: [] },
+  accountsLimited: { type: Boolean, default: false },
+  accounts: { type: [AccountRuleSchema], default: [] },
   active: { type: Boolean, default: true },
 }, { _id: false });
 

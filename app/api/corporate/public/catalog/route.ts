@@ -32,6 +32,12 @@ export async function GET() {
                   id: d.id, name: d.name, description: d.description, required: d.required,
                   subtypes: d.subtypes.filter(id => subtypeIds.has(id)),
                 })),
+              // account classes it can open (null: every account for organizations)
+              accounts: c.accountsLimited
+                ? (c.accounts || [])
+                  .filter(a => !a.subtypes.length || a.subtypes.some(id => subtypeIds.has(id)))
+                  .map(a => ({ classCode: a.classCode, subtypes: a.subtypes.filter(id => subtypeIds.has(id)) }))
+                : null,
             };
           }),
         rules: {

@@ -25,6 +25,15 @@ export async function getCorporateCatalog(): Promise<{ categories: ICorporateCat
   };
 }
 
+/**
+ * The account classes (codes) an organization of this category and sub-type can open, or null
+ * when KYC did not limit them (every active account for organizations)
+ */
+export function accountClassesFor(category: ICorporateCategory, subtypeId: string): string[] | null {
+  if (!category.accountsLimited) return null;
+  return (category.accounts || []).filter(a => !a.subtypes.length || a.subtypes.includes(subtypeId)).map(a => a.classCode);
+}
+
 /** The active documents an organization of this category and sub-type uploads */
 export function documentsFor(category: ICorporateCategory, subtypeId: string): ICorporateDocumentType[] {
   return category.documents.filter(d => d.active && (!d.subtypes.length || d.subtypes.includes(subtypeId)));
