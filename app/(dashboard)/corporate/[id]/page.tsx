@@ -193,9 +193,19 @@ export default function CorporateApplicationPage() {
               {isVerified ? v.fullName : p.fullName}
               <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">{roleLabel(p.roles)}</span>
               {p.isApplicant && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Applied</span>}
+              {!p.isApplicant && isVerified && p.verifiedVia === 'with_applicant' && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800" title="Verified on the applicant's phone, in their presence">
+                  Verified with the applicant
+                </span>
+              )}
+              {!p.isApplicant && isVerified && p.verifiedVia === 'link' && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-800" title="Verified on their own phone from the SMS link">
+                  Verified from SMS link
+                </span>
+              )}
             </p>
             {isVerified && v.fullNameAmharic && <p className="text-sm text-gray-600">{v.fullNameAmharic}</p>}
-            {!p.isApplicant && isVerified && (
+            {!p.isApplicant && isVerified && v.nameMatchScore != null && (
               <p className={`text-xs mt-0.5 ${(v.nameMatchScore ?? 0) < 80 ? 'text-amber-700' : 'text-gray-500'}`}>
                 Entered by the applicant as “{p.fullName}” — name match {v.nameMatchScore ?? 0}%
               </p>

@@ -11,7 +11,7 @@ const ACTION_LABELS: Record<string, string> = { mouth: 'Open mouth', turn: 'Head
 export const cleanBase64 = (s: unknown) => String(s || '').replace(/^data:[^;]+;base64,/, '').replace(/\s/g, '');
 export const sha256Base64 = (s: unknown) => crypto.createHash('sha256').update(cleanBase64(s)).digest('hex');
 
-interface EkycPayload {
+export interface EkycPayload {
   t: 'ekyc';
   iat: number;
   fan?: string;
@@ -43,7 +43,14 @@ interface FacePayload {
  * uploads, so only people who verified with Fayda can store files.
  */
 export async function checkEkycToken(ekycToken: string): Promise<'valid' | 'invalid' | 'unavailable'> {
-  if (!ekycToken) return 'invalid';
+  return (await readEkycToken(ekycToken)).status;
+}
+
+/** The eKYC data the Fayda backend signed (who the representative is), if it still accepts it */
+export async function readEkycToken(
+  ekycToken: string
+): Promise<{ status: 'valid'; ekyc: EkycPayload } | { status: 'invalid' | 'unavailable'; ekyc?: undefined }> {
+  if (!ekycToken) return { status: 'invalid' };
   try {
     const res = await fetch(`${FAYDA_BACKEND_URL}/api/fayda/verify-tokens`, {
       method: 'POST',
@@ -52,10 +59,10 @@ export async function checkEkycToken(ekycToken: string): Promise<'valid' | 'inva
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.message || `HTTP ${res.status}`);
-    return data.ekyc?.t === 'ekyc' ? 'valid' : 'invalid';
+    return data.ekyc?.t === 'ekyc' ? { status: 'valid', ekyc: data.ekyc } : { status: 'invalid' };
   } catch (e: any) {
     console.error('[Corporate] eKYC check at the Fayda backend failed:', e.message);
-    return 'unavailable';
+    return { status: 'unavailable' };
   }
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import CorporateApplication, { ICorporateApplication } from '@/lib/models/CorporateApplication';
+import CorporateVerification, { ICorporateVerification } from '@/lib/models/CorporateVerification';
 import { verifyIdentity } from '@/lib/faydaTokens';
 import { sendSMS } from '@/lib/sms';
 import { audit } from '@/lib/audit';
@@ -23,7 +24,17 @@ async function findInvite(token: string) {
   return app && person ? { app, person, tokenHash } : null;
 }
 
+/** A link sent while the application was still being filled in (not submitted yet) */
+async function findEarlyInvite(token: string): Promise<{ rec: ICorporateVerification; tokenHash: string } | null> {
+  if (!token || token.length < 20) return null;
+  const tokenHash = hashSecret(token);
+  const rec = await CorporateVerification.findOne({ 'invite.tokenHash': tokenHash, applicationId: '', cancelled: false, mode: 'link' })
+    .select('-verification.photo -verification.selfie -verification.livenessFrames');
+  return rec ? { rec, tokenHash } : null;
+}
+
 const NOT_VALID = 'This link is not valid any more. Ask the person who applied to send you a new one.';
+const expiredAt = (d?: Date) => !!d && new Date(d).getTime() < Date.now();
 const isOpen = (app: ICorporateApplication) => app.status === 'awaiting_verification';
 
 /** GET /api/corporate/public/invites/:token — who the link is for (verification page of the web app) */
@@ -31,7 +42,22 @@ export async function GET(_request: Request, { params }: { params: { token: stri
   try {
     await connectToDatabase();
     const found = await findInvite(params.token);
-    if (!found) return bad(NOT_VALID, 404);
+    if (!found) {
+      const early = await findEarlyInvite(params.token);
+      if (!early) return bad(NOT_VALID, 404);
+      const { rec } = early;
+      const verified = rec.verification?.status === 'verified';
+      return NextResponse.json({
+        success: true,
+        data: {
+          applicationId: '', submitted: false,
+          organizationName: rec.organizationName, categoryName: rec.categoryName, applicantName: rec.applicantName,
+          fullName: rec.enteredName, roles: rec.roles, roleText: roleText(rec.roles),
+          verified, verifiedName: verified ? rec.verification.fullName : undefined,
+          expired: !verified && expiredAt(rec.invite?.expiresAt), expiresAt: rec.invite?.expiresAt, open: true,
+        },
+      });
+    }
     const { app, person } = found;
     const applicant = app.people.find(p => p.isApplicant);
     const verified = person.verification?.status === 'verified';
@@ -39,6 +65,7 @@ export async function GET(_request: Request, { params }: { params: { token: stri
       success: true,
       data: {
         applicationId: app.applicationId,
+        submitted: true,
         organizationName: app.organization.name,
         categoryName: app.organization.categoryName,
         applicantName: applicant?.verification?.fullName || applicant?.fullName || '',
@@ -66,7 +93,11 @@ export async function POST(request: Request, { params }: { params: { token: stri
   try {
     await connectToDatabase();
     const found = await findInvite(params.token);
-    if (!found) return bad(NOT_VALID, 404);
+    if (!found) {
+      const early = await findEarlyInvite(params.token);
+      if (!early) return bad(NOT_VALID, 404);
+      return verifyEarly(request, early.rec, early.tokenHash);
+    }
     const { app, person, tokenHash } = found;
     if (person.verification?.status === 'verified') return bad('You have already verified. Thank you!', 409);
     if (!isOpen(app)) return bad('This application is no longer waiting for verification.', 409);
@@ -103,7 +134,7 @@ export async function POST(request: Request, { params }: { params: { token: stri
         ...(v.uin ? { 'people.verification.uin': { $ne: v.uin } } : {}),
       },
       {
-        $set: { 'people.$[person].verification': v, ...(hold ? { complianceHold: true } : {}) },
+        $set: { 'people.$[person].verification': v, 'people.$[person].verifiedVia': 'link', ...(hold ? { complianceHold: true } : {}) },
         $push: {
           history: {
             at: new Date(), by: v.fullName, action: 'Verified with Fayda',
@@ -139,10 +170,63 @@ export async function POST(request: Request, { params }: { params: { token: stri
 
     return NextResponse.json({
       success: true,
-      data: { fullName: v.fullName, organizationName: app.organization.name, applicationId: app.applicationId, allVerified },
+      data: { fullName: v.fullName, organizationName: app.organization.name, applicationId: app.applicationId, allVerified, submitted: true },
     });
   } catch (error: any) {
     console.error('[Corporate] Invite verification error:', error);
     return NextResponse.json({ success: false, error: 'Failed to save your verification', detail: String(error?.message || error).slice(0, 300) }, { status: 500 });
   }
+}
+
+/**
+ * Verification from a link sent before the application was submitted: stored on the record; the
+ * representative's wizard shows the tick, and the application takes it over on submission.
+ */
+async function verifyEarly(request: Request, rec: ICorporateVerification, tokenHash: string) {
+  if (rec.verification?.status === 'verified') return bad('You have already verified. Thank you!', 409);
+  if (expiredAt(rec.invite?.expiresAt)) return bad('This link has expired. Ask the person who applied to send you a new one.', 410);
+  const body = await request.json().catch(() => null);
+  if (!body) return bad('Invalid request');
+  const identity = await verifyIdentity({
+    ekycToken: String(body.ekycToken || ''),
+    faceVerificationToken: String(body.faceVerificationToken || ''),
+    faydaPhoto: String(body.faydaPhoto || ''),
+    selfie: String(body.selfie || ''),
+    livenessFrames: Array.isArray(body.livenessFrames) ? body.livenessFrames : [],
+    faceVideoId: text(body.faceVideoId, 100),
+  }, rec.enteredName);
+  if (!identity.verification) return bad(identity.error || 'Please verify with Fayda again.', 401);
+  const v = identity.verification;
+
+  // Everyone verifies with their own Fayda ID
+  if (v.uin && v.uin === rec.applicantUin) {
+    return bad(`This Fayda ID belongs to ${rec.applicantName}, who applied. Each person verifies with their own Fayda ID.`, 409);
+  }
+  const same = v.uin ? await CorporateVerification.findOne({
+    groupId: rec.groupId, cancelled: false, applicationId: '', verificationId: { $ne: rec.verificationId }, 'verification.uin': v.uin,
+  }).select('verification.fullName').lean() as any : null;
+  if (same) {
+    return bad(`This Fayda ID was already used to verify ${same.verification?.fullName || 'someone else'} on this application. Each person verifies with their own Fayda ID.`, 409);
+  }
+
+  v.screening = await screenName(v.fullName || '', v.dateOfBirth);
+  const hold = screeningHold(v.screening);
+  const updated = await CorporateVerification.updateOne(
+    { _id: rec._id, applicationId: '', cancelled: false, 'invite.tokenHash': tokenHash, 'verification.status': 'pending' },
+    { $set: { verification: v } }
+  );
+  // Submitted (or removed) meanwhile: the link now belongs to the application — open it again
+  if (!updated.modifiedCount) return bad('The application changed meanwhile. Please open the link again.', 409);
+
+  await audit(request, {
+    module: 'CORPORATE', action: 'VERIFY', entityType: 'CorporateVerification', entityId: rec.verificationId,
+    entityName: rec.organizationName, actor: personActor(v.fullName || rec.enteredName),
+    description: `${v.fullName} verified with Fayda as ${roleText(rec.roles)} from the SMS link, before the application was submitted`
+      + (rec.enteredName ? ` (entered as "${rec.enteredName}", name match ${v.nameMatchScore ?? 0}%)` : '')
+      + (hold ? ' — screening match: KYC must escalate to a Senior Approver' : ''),
+  });
+  return NextResponse.json({
+    success: true,
+    data: { fullName: v.fullName, organizationName: rec.organizationName, applicationId: '', allVerified: false, submitted: false, applicantName: rec.applicantName },
+  });
 }

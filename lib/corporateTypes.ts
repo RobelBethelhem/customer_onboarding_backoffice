@@ -27,6 +27,7 @@ export interface CorporatePerson {
   phone: string;
   roles: CorporateRole[];
   isApplicant: boolean;
+  verifiedVia?: 'with_applicant' | 'link' | '';
   invite?: { sentAt?: string; sentCount?: number; expiresAt?: string; smsSent?: boolean };
   verification: {
     status: 'pending' | 'verified';

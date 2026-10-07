@@ -7,6 +7,7 @@ import CorporateApplication, {
   ICorporateApplication, ICorporatePerson, CorporateRole, SigningRule,
 } from '@/lib/models/CorporateApplication';
 import type { ICorporateRules } from '@/lib/models/CorporateCatalog';
+import type { ICorporateVerification } from '@/lib/models/CorporateVerification';
 
 export const newSecret = () => crypto.randomBytes(24).toString('base64url');
 export const hashSecret = (s: string) => crypto.createHash('sha256').update(String(s)).digest('hex');
@@ -120,6 +121,13 @@ export const text = (v: unknown, max = 200) => String(v ?? '').trim().slice(0, m
 
 /** Applicant / invited person as the actor of an audit event */
 export const personActor = (name: string) => ({ performedBy: name || 'Applicant', performedByName: name || '', performedByRole: 'applicant' });
+
+/** Whether `secret` is the one stored as `hash` (hashSecret), without leaking timing */
+export function matchesHash(secret: string, hash: string): boolean {
+  if (!secret || !hash) return false;
+  const a = Buffer.from(hashSecret(secret)), b = Buffer.from(String(hash));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 /** Compare secrets without leaking timing */
 export function sameSecret(a: string, b: string): boolean {
@@ -262,9 +270,42 @@ export async function resendInvite(
   return { smsSent, person };
 }
 
+// ─── Verifications while the application is filled in ─────────────────────────────────────────
+/** What the representative's wizard sees of a signatory/director verification */
+export function verificationView(rec: ICorporateVerification) {
+  const verified = rec.verification?.status === 'verified';
+  return {
+    verificationId: rec.verificationId,
+    mode: rec.mode,
+    status: verified ? 'verified' : 'pending',
+    fullName: verified ? rec.verification.fullName || '' : '',
+    enteredName: rec.enteredName,
+    roles: rec.roles,
+    phone: maskPhone(rec.phone),
+    sentAt: rec.invite?.sentAt,
+    sentCount: rec.invite?.sentCount || 0,
+    smsSent: rec.invite?.smsSent,
+    expiresAt: rec.invite?.expiresAt,
+    expired: !verified && !!rec.invite?.expiresAt && new Date(rec.invite.expiresAt).getTime() < Date.now(),
+  };
+}
+
+/** A new SMS link (the old one stops working when this replaces it) */
+export function newInvite(validDays: number, sentCount = 0) {
+  const token = newSecret();
+  return {
+    token,
+    link: inviteLink(token),
+    invite: {
+      tokenHash: hashSecret(token), sentAt: new Date(), sentCount: sentCount + 1,
+      expiresAt: new Date(Date.now() + validDays * DAY_MS), smsSent: false,
+    },
+  };
+}
+
 // ─── SMS texts ───────────────────────────────────────────────────────────────────────────────
 export const smsInvite = (name: string, applicant: string, org: string, roles: CorporateRole[], link: string, days: number) =>
-  `Dear ${name},\n\n${applicant} added you as ${roleText(roles)} of ${org} on a Zemen Bank business account application. ` +
+  `${name ? `Dear ${name},` : 'Hello,'}\n\n${applicant} added you as ${roleText(roles)} of ${org} on a Zemen Bank business account application. ` +
   `Please verify your identity with your Fayda ID here: ${link}\n\nThe link works for ${days} days.`;
 
 export const smsSubmitted = (id: string, org: string, othersToVerify: number, link: string) =>

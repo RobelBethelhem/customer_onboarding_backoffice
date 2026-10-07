@@ -3,6 +3,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import CorporateApplication, {
   CorporateRole, ICorporateAddress, ICorporatePerson, SigningRule,
 } from '@/lib/models/CorporateApplication';
+import CorporateVerification, { ICorporateVerification } from '@/lib/models/CorporateVerification';
 import { getCorporateCatalog, documentsFor } from '@/lib/corporateCatalog';
 import { findAccountClass } from '@/lib/accountProducts';
 import { getBranches, ifbBranchFor } from '@/lib/ifbBranches';
@@ -10,8 +11,9 @@ import { verifyIdentity } from '@/lib/faydaTokens';
 import { sendSMS } from '@/lib/sms';
 import { audit } from '@/lib/audit';
 import {
-  bad, text, newSecret, hashSecret, normalizeMobile, nextCorporateId, loadUploads, fileRef, claimUploads,
+  bad, text, newSecret, hashSecret, normalizeMobile, nextCorporateId, loadUploads, fileRef, claimUploads, releaseUploads,
   inviteLink, statusLink, smsInvite, smsSubmitted, personActor, publicView, screenName, screeningHold, SIGNING_RULES,
+  matchesHash, maskPhone,
 } from '@/lib/corporate';
 
 export const dynamic = 'force-dynamic';
@@ -43,7 +45,9 @@ interface FileInput { fileId?: string; fileKey?: string }
  *   applicant: { ekycToken, faceVerificationToken?, faydaPhoto, selfie, livenessFrames?, faceVideoId?, phone, roles, signature? },
  *   organization: { name, categoryId, subtypeId, registrationNumber, …, registeredAddress, correspondenceAddress },
  *   branchCode, accountTypeId, accountClassCode, signingRule, signingRuleOther,
- *   people: [{ fullName, phone, roles, signature? }],      // everyone except the applicant
+ *   groupId,                                               // the wizard's id for this application
+ *   people: [{ verificationId, verificationKey, roles, signature? }   // verified with the applicant, or link sent
+ *          | { fullName, phone, roles, signature? }],               // (older form) link sent on submission
  *   documents: [{ docId, fileId, fileKey }],
  * }   (signature = { fileId, fileKey } from /api/corporate/public/files)
  */
@@ -115,8 +119,40 @@ export async function POST(request: Request) {
     }];
     const signatureInputs: (FileInput | undefined)[] = [a.signature];
     const phones = new Set([applicantPhone]);
+
+    // People who verified with the applicant, or got their SMS link, while the form was filled in
+    const groupId = text(body.groupId, 64);
+    const verificationIds: string[] = others.map(p => text(p?.verificationId, 40)).filter(Boolean);
+    if (new Set(verificationIds).size !== verificationIds.length) return bad('The same person is on the application twice.');
+    const records: ICorporateVerification[] = verificationIds.length
+      ? await CorporateVerification.find({ verificationId: { $in: verificationIds }, cancelled: false }) : [];
+    const taken: { rec: ICorporateVerification; status: string }[] = [];
+
     for (let i = 0; i < others.length; i++) {
       const p = others[i] || {};
+      if (p.verificationId) {
+        const rec = records.find(r => r.verificationId === text(p.verificationId, 40));
+        if (!rec || rec.applicationId || !groupId || rec.groupId !== groupId || !matchesHash(String(p.verificationKey || ''), rec.keyHash)) {
+          return bad(`Person ${i + 2} is no longer on this application (removed or expired). Please add them again.`, 400, { verificationId: p.verificationId });
+        }
+        const verified = rec.verification?.status === 'verified';
+        const roles = rolesOf(p.roles).length ? rolesOf(p.roles) : rec.roles;
+        if (rec.mode === 'link') {
+          if (phones.has(rec.phone)) return bad(`${maskPhone(rec.phone)}: each person needs their own mobile number — the verification link is sent to it`);
+          phones.add(rec.phone);
+        }
+        people.push({
+          id: `P${i + 2}`,
+          fullName: verified ? rec.verification.fullName || 'Verified person' : rec.enteredName || `Mobile ${maskPhone(rec.phone)}`,
+          phone: rec.phone, roles, isApplicant: false,
+          ...(verified ? { verifiedVia: rec.mode } : {}),
+          verification: verified ? (rec.toObject().verification as any) : { status: 'pending' },
+          ...(!verified && rec.invite ? { invite: rec.toObject().invite as any } : {}),
+        });
+        taken.push({ rec, status: verified ? 'verified' : 'pending' });
+        signatureInputs.push(p.signature);
+        continue;
+      }
       const fullName = text(p.fullName, 100).replace(/\s+/g, ' ');
       if (fullName.split(' ').length < 2) return bad(`Enter the full name of person ${i + 2}`);
       const phone = normalizeMobile(p.phone);
@@ -171,13 +207,16 @@ export async function POST(request: Request) {
     });
     if (!identity.verification) return bad(identity.error || 'Please verify with Fayda again.', 401);
     const me = identity.verification;
+    const verifiedUins = people.slice(1).map(p => p.verification.uin).filter(Boolean) as string[];
+    if (me.uin && verifiedUins.includes(me.uin)) return bad('You are also added as another person. Each person verifies with their own Fayda ID — please remove them.', 409);
+    if (new Set(verifiedUins).size !== verifiedUins.length) return bad('The same Fayda ID verified for two people. Please remove one of them.', 409);
     me.screening = await screenName(me.fullName || '', me.dateOfBirth);
     people[0].fullName = me.fullName || 'Applicant';
     people[0].verification = me;
 
     // PEP / sanctions screening: the organization's name now, each person when they verify
     const organizationScreening = await screenName(name);
-    const complianceHold = screeningHold(organizationScreening) || screeningHold(me.screening);
+    const complianceHold = screeningHold(organizationScreening) || people.some(p => screeningHold(p.verification?.screening));
 
     // Interest-free accounts open in the IFB counterpart of the chosen branch (e.g. 164 → 664)
     let branchCode = branch.conventionalCode;
@@ -200,13 +239,22 @@ export async function POST(request: Request) {
     });
     const tokens = new Map<string, string>();
     for (const p of people.slice(1)) {
+      if (p.verification.status === 'verified' || p.invite) continue; // verified already, or link sent already
       const token = newSecret();
       tokens.set(p.id, token);
       p.invite = { tokenHash: hashSecret(token), sentAt: new Date(), sentCount: 1, expiresAt: new Date(Date.now() + rules.inviteValidDays * DAY_MS), smsSent: false };
     }
 
     const accessKey = newSecret();
-    const everyoneVerified = people.length === 1;
+    const everyoneVerified = people.every(p => p.verification.status === 'verified');
+    const withApplicant = people.filter(p => p.verifiedVia === 'with_applicant').length;
+    const viaLink = people.filter(p => p.verifiedVia === 'link').length;
+    const waiting = people.filter(p => p.verification.status !== 'verified').length;
+    const peopleNote = [
+      withApplicant && `${withApplicant} verified with the applicant`,
+      viaLink && `${viaLink} verified from the SMS link`,
+      waiting && `${waiting} still to verify`,
+    ].filter(Boolean).join(', ');
     const record = {
       applicationId: await nextCorporateId(),
       status: everyoneVerified ? 'pending' : 'awaiting_verification',
@@ -230,7 +278,7 @@ export async function POST(request: Request) {
       complianceHold,
       history: [{
         at: new Date(), by: people[0].fullName, action: 'Submitted',
-        note: everyoneVerified ? 'Sent to KYC' : `Verification links sent to ${people.length - 1} ${people.length === 2 ? 'person' : 'people'}`,
+        note: (everyoneVerified ? 'Sent to KYC' : 'Waiting for verification') + (peopleNote ? ` — ${peopleNote}` : ''),
       }],
       submittedAt: new Date(),
       verifiedAt: everyoneVerified ? new Date() : undefined,
@@ -252,6 +300,24 @@ export async function POST(request: Request) {
       await CorporateApplication.deleteOne({ _id: app._id });
       return bad('This application has already been submitted.', 409);
     }
+    // Take over the people's records — unless one changed since they were read (someone just
+    // verified, or the same records went with another submission): then start again
+    const claimed: ICorporateVerification[] = [];
+    for (const { rec, status } of taken) {
+      const r = await CorporateVerification.updateOne(
+        { _id: rec._id, applicationId: '', cancelled: false, 'verification.status': status },
+        { $set: { applicationId: app.applicationId } }
+      );
+      if (!r.modifiedCount) break;
+      claimed.push(rec);
+    }
+    if (claimed.length !== taken.length) {
+      await CorporateVerification.updateMany({ _id: { $in: claimed.map(r => r._id) }, applicationId: app.applicationId }, { $set: { applicationId: '' } });
+      await releaseUploads(refs.map(r => r.fileId), app.applicationId);
+      await CorporateApplication.deleteOne({ _id: app._id });
+      return bad('Someone on the application has just finished verifying. Please press Submit again.', 409);
+    }
+    if (claimed.length) await CorporateVerification.deleteMany({ _id: { $in: claimed.map(r => r._id) }, applicationId: app.applicationId });
 
     await audit(request, {
       module: 'CORPORATE', action: 'SUBMIT', entityType: 'CorporateApplication',
@@ -259,7 +325,7 @@ export async function POST(request: Request) {
       description: `Submitted by ${people[0].fullName} — ${category.name}${subtype ? ` (${subtype.name})` : ''}, `
         + `${product.name} / ${accountClass.name}, ${people.length} ${people.length === 1 ? 'person' : 'people'}, `
         + `${documents.filter(d => d.file).length} document(s)`
-        + (everyoneVerified ? '' : `; verification links sent to ${people.length - 1}`)
+        + (peopleNote ? `; ${peopleNote}` : '')
         + (complianceHold ? ' — screening match: KYC must escalate to a Senior Approver' : ''),
       actor: personActor(people[0].fullName),
     });
@@ -268,15 +334,16 @@ export async function POST(request: Request) {
     const applicationId = app.applicationId;
     const appId = app._id;
     void (async () => {
-      const sent = await Promise.all(people.slice(1).map(p => sendSMS(
+      const toInvite = people.map((p, index) => ({ p, index })).filter(({ p }) => tokens.has(p.id));
+      const sent = await Promise.all(toInvite.map(({ p }) => sendSMS(
         p.phone, smsInvite(p.fullName, people[0].fullName, name, p.roles, inviteLink(tokens.get(p.id)!), rules.inviteValidDays)
       )));
       if (sent.length) {
         const set: Record<string, boolean> = {};
-        sent.forEach((ok, i) => { set[`people.${i + 1}.invite.smsSent`] = ok; });
+        sent.forEach((ok, i) => { set[`people.${toInvite[i].index}.invite.smsSent`] = ok; });
         await CorporateApplication.updateOne({ _id: appId }, { $set: set });
       }
-      await sendSMS(applicantPhone, smsSubmitted(applicationId, name, people.length - 1, statusLink(applicationId, accessKey)));
+      await sendSMS(applicantPhone, smsSubmitted(applicationId, name, waiting, statusLink(applicationId, accessKey)));
     })().catch(e => console.error('[Corporate] SMS after submission failed:', e?.message || e));
 
     return NextResponse.json({

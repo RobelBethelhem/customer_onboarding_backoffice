@@ -90,13 +90,20 @@ export interface IPersonVerification {
   screening?: Record<string, any>;
 }
 
+// How a person other than the applicant verified: on the applicant's phone, with them, or on
+// their own phone from the SMS link
+export type VerifiedVia = 'with_applicant' | 'link';
+
+export interface ICorporateInvite { tokenHash: string; sentAt: Date; sentCount: number; expiresAt: Date; smsSent: boolean }
+
 export interface ICorporatePerson {
   id: string;
-  fullName: string;             // as entered by the representative
+  fullName: string;             // as entered by the representative (the Fayda name once verified with them)
   phone: string;
   roles: CorporateRole[];
   isApplicant: boolean;
-  invite?: { tokenHash: string; sentAt: Date; sentCount: number; expiresAt: Date; smsSent: boolean };
+  verifiedVia?: VerifiedVia;
+  invite?: ICorporateInvite;
   verification: IPersonVerification;
   signature?: ICorporateFileRef & { review: IReview; previous?: ICorporateFileRef[] };
 }
@@ -189,7 +196,7 @@ const SignatureSchema = new Schema({
   previous: { type: [FileRefSchema], default: [] },
 }, { _id: false });
 
-const VerificationSchema = new Schema<IPersonVerification>({
+export const VerificationSchema = new Schema<IPersonVerification>({
   status: { type: String, enum: ['pending', 'verified'], default: 'pending' },
   verifiedAt: { type: Date },
   fan: { type: String },
@@ -212,21 +219,22 @@ const VerificationSchema = new Schema<IPersonVerification>({
   screening: { type: Schema.Types.Mixed },
 }, { _id: false });
 
+export const InviteSchema = new Schema<ICorporateInvite>({
+  tokenHash: { type: String, default: '' },
+  sentAt: { type: Date },
+  sentCount: { type: Number, default: 0 },
+  expiresAt: { type: Date },
+  smsSent: { type: Boolean, default: false },
+}, { _id: false });
+
 const PersonSchema = new Schema<ICorporatePerson>({
   id: { type: String, required: true },
   fullName: { type: String, required: true },
   phone: { type: String, default: '' },
   roles: { type: [String], enum: ['signatory', 'director'], default: [] },
   isApplicant: { type: Boolean, default: false },
-  invite: {
-    type: new Schema({
-      tokenHash: { type: String, default: '' },
-      sentAt: { type: Date },
-      sentCount: { type: Number, default: 0 },
-      expiresAt: { type: Date },
-      smsSent: { type: Boolean, default: false },
-    }, { _id: false }),
-  },
+  verifiedVia: { type: String, enum: ['with_applicant', 'link', ''], default: '' },
+  invite: { type: InviteSchema },
   verification: { type: VerificationSchema, default: () => ({ status: 'pending' }) },
   signature: { type: SignatureSchema },
 }, { _id: false });
