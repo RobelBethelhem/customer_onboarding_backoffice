@@ -18,6 +18,7 @@ export interface IAccountProduct {
   name: string;
   description: string;
   isIFB: boolean;               // interest-free: green theme, IFB branch codes
+  audience?: 'individual' | 'organization' | 'both'; // who can open it (missing = individual)
   active: boolean;
   classes: IAccountClass[];     // in display order
 }
@@ -46,6 +47,7 @@ const AccountProductSchema = new Schema<IAccountProduct>({
   name: { type: String, required: true },
   description: { type: String, default: '' },
   isIFB: { type: Boolean, default: false },
+  audience: { type: String, enum: ['individual', 'organization', 'both'], default: 'individual' },
   active: { type: Boolean, default: true },
   classes: { type: [AccountClassSchema], default: [] },
 }, { _id: false });

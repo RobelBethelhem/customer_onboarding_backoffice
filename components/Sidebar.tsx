@@ -21,6 +21,7 @@ import {
   Smartphone,
   History,
   Package,
+  Building2,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth, UserRole } from './AuthProvider';
@@ -31,6 +32,7 @@ interface MenuItem {
   icon: any;
   badge?: boolean;
   servicesBadge?: boolean;  // count of service requests waiting for this Personal Banker
+  corporateBadge?: boolean; // business account applications waiting for this user's decision
   divider?: boolean;
   roles: UserRole[];
 }
@@ -42,6 +44,7 @@ const menuItems: MenuItem[] = [
   { name: 'Auto Approved', href: '/auto-approved', icon: Zap, roles: ['admin', 'kyc', 'branch', 'senior_approver'] },
   { name: 'Manually Approved', href: '/approved', icon: CheckCircle2, roles: ['admin', 'kyc', 'branch', 'senior_approver'] },
   { name: 'Rejected', href: '/rejected', icon: XCircle, roles: ['admin', 'kyc', 'senior_approver'] },
+  { name: 'Business Accounts', href: '/corporate', icon: Building2, corporateBadge: true, roles: ['admin', 'kyc', 'senior_approver'] },
   { name: 'Sanctions & PEP', href: '/sanctions', icon: Shield, roles: ['admin', 'sanction_uploader'] },
   { name: 'Service Requests', href: '/services', icon: Smartphone, servicesBadge: true, roles: ['admin', 'personal_banker'] },
   { name: 'Executive Review', href: '/executive-review', icon: TrendingUp, divider: true, roles: ['admin', 'kyc'] },
@@ -58,6 +61,7 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [servicesCount, setServicesCount] = useState(0);
+  const [corporateCount, setCorporateCount] = useState(0);
 
   const filteredItems = menuItems.filter(item =>
     user && item.roles.includes(user.role)
@@ -70,6 +74,26 @@ export default function Sidebar() {
       return () => clearInterval(interval);
     }
   }, [user]);
+
+  // Business accounts waiting: pending / in review for KYC and admin, escalated for Senior Approvers
+  useEffect(() => {
+    if (user && ['admin', 'kyc', 'senior_approver'].includes(user.role)) {
+      fetchCorporateCount();
+      const interval = setInterval(fetchCorporateCount, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  async function fetchCorporateCount() {
+    try {
+      const status = user?.role === 'senior_approver' ? 'escalated' : 'open';
+      const response = await fetch(`/api/corporate/applications?status=${status}&limit=1`);
+      const data = await response.json();
+      if (data.success) setCorporateCount(data.total);
+    } catch (err) {
+      console.error('Failed to fetch business account count:', err);
+    }
+  }
 
   useEffect(() => {
     if (user?.role === 'personal_banker') {
@@ -146,9 +170,9 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
         {filteredItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || (item.href === '/corporate' && pathname.startsWith('/corporate/'));
           const Icon = item.icon;
-          const count = item.badge ? pendingCount : item.servicesBadge ? servicesCount : 0;
+          const count = item.badge ? pendingCount : item.servicesBadge ? servicesCount : item.corporateBadge ? corporateCount : 0;
 
           return (
             <div key={item.name}>

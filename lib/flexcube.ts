@@ -1179,3 +1179,170 @@ export async function createCustomerAndAccount(
     message: `Customer created in FlexCube — CIF: ${cifResult.cifNumber}, Account: ${accountResult.accountNumber}`,
   };
 }
+
+// ─── Corporate customers (organizations) ─────────────────────────────────────────────────────
+
+export interface CorporateAddress {
+  city: string;
+  subCity: string;
+  woreda: string;
+  houseNumber: string;
+}
+
+export interface CreateCorporateCIFRequest {
+  name: string;
+  categoryName: string;
+  branchCode: string;
+  tin: string;
+  vatNumber: string;
+  registrationNumber: string;
+  registeredAddress: CorporateAddress;
+  sameCorrespondenceAddress: boolean;
+  correspondenceAddress: CorporateAddress;
+  phone: string;
+  fax: string;
+  email: string;
+  mobile: string;
+  directors: string[];          // DIRNAME, one Custcorpdir each
+  promotionType: string;
+  wealthSource: string;
+  otherWealthSource: string;
+  industry: string;
+  otherIndustry: string;
+  annualIncome: number;
+  pep: boolean;                 // any signatory/director is a politically exposed person
+  agentNationalId: string;      // Fayda number of the representative who applied
+}
+
+// Header as in the core banking team's corporate CreateCustomer sample (REQ_CORPORATE.xml)
+const CORPORATE_CIF_SOURCE = 'EXTIB';
+const CORPORATE_CIF_USER = 'IB_SER';
+
+const corporateMobile = (phone: string) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const local = digits.replace(/^251/, '').replace(/^0/, '');
+  return local ? `+251${local}` : '';
+};
+
+function buildCreateCorporateCustomerEnvelope(data: CreateCorporateCIFRequest, config: FlexCubeConfig): string {
+  const msgId = generateMsgId();
+  const correlId = generateCorrelId();
+  const branch = data.branchCode || config.defaultBranch;
+  const letters = data.name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const shortName = `${letters.substring(0, 6)}${msgId}`.substring(0, 25);
+  const reg = data.registeredAddress;
+  const corr = data.sameCorrespondenceAddress ? data.registeredAddress : data.correspondenceAddress;
+  const mobile = corporateMobile(data.mobile);
+  const telephone = String(data.phone || data.mobile || '').replace(/[^\d+]/g, '');
+  const fcIndustry = FLEXCUBE_INDUSTRY_MAP[data.industry] || 'O';
+  const fcPromotion = FLEXCUBE_PROMOTION_MAP[data.promotionType || 'Walk in customer'] || 'Walk in customer';
+  const el = (tag: string, value: string | number | undefined, indent: string) =>
+    value === undefined || value === '' ? '' : `\n${indent}<fcub:${tag}>${escapeXml(String(value))}</fcub:${tag}>`;
+  const udf = (name: string, value: string) => `
+               <fcub:UDFDETAILS>
+                  <fcub:FLDNAM>${name}</fcub:FLDNAM>
+                  <fcub:FLDVAL>${escapeXml(value)}</fcub:FLDVAL>
+               </fcub:UDFDETAILS>`;
+  const directors = data.directors.filter(Boolean).map(d => `
+                        <fcub:Custcorpdir>
+                          <fcub:DIRNAME>${escapeXml(d.toUpperCase())}</fcub:DIRNAME>
+                        </fcub:Custcorpdir>`).join('');
+  const i = '                        ';
+
+  console.log(`[FlexCube] Corporate CIF: ${data.name} (${data.categoryName}), branch ${branch}, TIN ${data.tin}, ${data.directors.length} director(s)`);
+
+  return `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:fcub="http://fcubs.ofss.com/service/FCUBSCustomerService">
+    <soapenv:Header/>
+    <soapenv:Body>
+        <fcub:CREATECUSTOMER_FSFS_REQ>
+            <fcub:FCUBS_HEADER>
+                <fcub:SOURCE>${CORPORATE_CIF_SOURCE}</fcub:SOURCE>
+                <fcub:UBSCOMP>FCUBS</fcub:UBSCOMP>
+                <fcub:CORRELID>${correlId}</fcub:CORRELID>
+                <fcub:USERID>${CORPORATE_CIF_USER}</fcub:USERID>
+                <fcub:BRANCH>${escapeXml(branch)}</fcub:BRANCH>
+                <fcub:MODULEID>ST</fcub:MODULEID>
+                <fcub:SERVICE>FCUBSCustomerService</fcub:SERVICE>
+                <fcub:OPERATION>CreateCustomer</fcub:OPERATION>
+                <fcub:ACTION>NEW</fcub:ACTION>
+                <fcub:MSGSTAT>SUCCESS</fcub:MSGSTAT>
+            </fcub:FCUBS_HEADER>
+            <fcub:FCUBS_BODY>
+                <fcub:Customer-Full>
+                    <fcub:CTYPE>C</fcub:CTYPE>
+                    <fcub:SNAME>${escapeXml(shortName)}</fcub:SNAME>
+                    <fcub:NLTY>ET</fcub:NLTY>
+                    <fcub:LBRN>${escapeXml(branch)}</fcub:LBRN>
+                    <fcub:CCATEG>CORP</fcub:CCATEG>
+                    <fcub:FULLNAME>${escapeXml(data.name.toUpperCase())}</fcub:FULLNAME>
+                    <fcub:TAXIDENTITY>${escapeXml(data.tin)}</fcub:TAXIDENTITY>
+                    <fcub:MEDIA>MAIL</fcub:MEDIA>
+                    <fcub:LOC>CIF</fcub:LOC>
+                    <fcub:FLGJOINT>N</fcub:FLGJOINT>
+                    <fcub:Custcorp>${el('REGADD1', reg.city.toUpperCase(), i)}${el('REGADD2', reg.subCity.toUpperCase(), i)}${el('REGADD3', reg.woreda.toUpperCase(), i)}${el('REGADD4', reg.houseNumber.toUpperCase(), i)}
+                        <fcub:SAME_CORR_ADDR>${data.sameCorrespondenceAddress ? 'Y' : 'N'}</fcub:SAME_CORR_ADDR>${el('CADDR1', corr.city.toUpperCase(), i)}${el('CADDR3', corr.woreda.toUpperCase(), i)}${el('CADDR2', corr.subCity.toUpperCase(), i)}${el('CADDR4', corr.houseNumber.toUpperCase(), i)}
+                        <fcub:CNTRY>ET</fcub:CNTRY>
+                        <fcub:LANGUAGE>ENG</fcub:LANGUAGE>${el('TELEPHONE', telephone, i)}${el('FAX', data.fax, i)}${el('EMAILID', (data.email || '').toUpperCase(), i)}${el('MOBILENUMBER', mobile, i)}${el('NATIONID', data.registrationNumber, i)}${directors}
+                    </fcub:Custcorp>${udf('MAINT_FEE_WAIVED', 'Y')}${udf('CUSTOMER_SEGMENTATION', 'RETAIL CUSTOMER')}${udf('PROMOTION_TYPE', fcPromotion)}${udf('WEALTH_SOURCE', data.wealthSource || 'O')}${udf('OCCUPATION', 'O')}${udf('INDUSTRY', fcIndustry)}${udf('ANNUAL_INCOME', (Number(data.annualIncome) || 0).toFixed(2))}${udf('CURRENCY_REDEMPTION_PURPOSE', 'Y')}${udf('IS_THE_CUSTOMER_IN_SANCTION_LIST', 'N')}${udf('JOINT_ACC_PHNUMBER', mobile.replace(/^\+251/, ''))}${udf('CUSTOMER_RISK_RATING', 'HIGH')}${udf('CB_RM_GROUP', 'NA')}${udf('LEAD_RM', 'NA')}${udf('AGENTS_NATIONAL_ID_NUMBER', data.agentNationalId)}${udf('VAT_NO', data.vatNumber || '')}${udf('PLTCS_EX_PERSON', data.pep ? 'YES' : 'NO')}${udf('OTHER_WEALTH_SOURCE', data.otherWealthSource || '')}${udf('OTHER_OCCUPATION', data.categoryName.toUpperCase())}${udf('OTHER_INDUSTRY', data.otherIndustry || '')}
+                </fcub:Customer-Full>
+            </fcub:FCUBS_BODY>
+        </fcub:CREATECUSTOMER_FSFS_REQ>
+    </soapenv:Body>
+</soapenv:Envelope>`;
+}
+
+/** Corporate CIF (CTYPE C, category CORP) — CreateCustomer on FCUBSCustomerService */
+export async function createCorporateCIF(
+  data: CreateCorporateCIFRequest,
+  config: FlexCubeConfig = defaultFlexCubeConfig
+): Promise<CreateCIFResult> {
+  try {
+    console.log(`\n========== FLEXCUBE: CREATE CORPORATE CIF ==========`);
+    const envelope = buildCreateCorporateCustomerEnvelope(data, config);
+    const response = await callSoapService(config.customerServiceUrl, envelope, config.timeout);
+    if (isSuccessResponse(response)) {
+      const custNo = extractXmlValue(response, 'CUSTNO');
+      if (custNo) {
+        console.log(`[FlexCube] Corporate CIF created: ${custNo}`);
+        return { success: true, cifNumber: custNo, message: `Corporate CIF ${custNo} created in FlexCube`, rawResponse: response };
+      }
+    }
+    const errorMsg = extractErrorFromResponse(response);
+    console.error(`[FlexCube] Corporate CIF creation failed: ${errorMsg}`);
+    return { success: false, message: `FlexCube corporate CIF creation failed: ${errorMsg}`, rawResponse: response };
+  } catch (error: any) {
+    console.error(`[FlexCube] Corporate CIF creation error:`, error.message);
+    return { success: false, message: `FlexCube connection error: ${error.message}` };
+  }
+}
+
+/**
+ * Corporate CIF + account. `existingCif` (from an earlier attempt whose account step failed) skips
+ * the CIF so the organization never gets two.
+ */
+export async function createCorporateCustomerAndAccount(
+  data: CreateCorporateCIFRequest & { tierId: string; accountClass: string; islamic: boolean; existingCif?: string },
+  config: FlexCubeConfig = defaultFlexCubeConfig
+): Promise<{ success: boolean; cifNumber?: string; accountNumber?: string; message: string }> {
+  let cifNumber = data.existingCif || '';
+  if (!cifNumber) {
+    const cif = await createCorporateCIF(data, config);
+    if (!cif.success || !cif.cifNumber) return { success: false, message: `CIF creation failed: ${cif.message}` };
+    cifNumber = cif.cifNumber;
+  }
+  const account = await createAccountForCIF({
+    cifNumber,
+    customerName: data.name,
+    branchCode: data.branchCode,
+    tierId: data.tierId,
+    accountClass: data.accountClass,
+    islamic: data.islamic,
+  }, config);
+  if (!account.success || !account.accountNumber) {
+    return { success: false, cifNumber, message: `CIF ${cifNumber} created but account creation failed: ${account.message}` };
+  }
+  return {
+    success: true, cifNumber, accountNumber: account.accountNumber,
+    message: `Corporate customer created in FlexCube — CIF: ${cifNumber}, Account: ${account.accountNumber}`,
+  };
+}

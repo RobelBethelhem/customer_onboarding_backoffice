@@ -1,29 +1,32 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Package, Layers, Smartphone } from 'lucide-react';
+import { Package, Layers, Smartphone, Building2 } from 'lucide-react';
 import AccountProductsManager from '@/components/AccountProductsManager';
 import AdditionalServicesManager from '@/components/AdditionalServicesManager';
+import CorporateCatalogManager from '@/components/CorporateCatalogManager';
 
-type Tab = 'products' | 'services';
+type Tab = 'products' | 'services' | 'business';
 
 // What customers can choose in the web app — managed by KYC officers (and admin)
 export default function ProductsAndServicesPage() {
   const [tab, setTab] = useState<Tab>('products');
 
-  // ?tab=services opens the services tab directly
+  // ?tab=services / ?tab=business opens that tab directly
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('tab') === 'services') setTab('services');
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'services' || t === 'business') setTab(t);
   }, []);
 
   const select = (next: Tab) => {
     setTab(next);
-    window.history.replaceState(null, '', next === 'services' ? '?tab=services' : window.location.pathname);
+    window.history.replaceState(null, '', next === 'products' ? window.location.pathname : `?tab=${next}`);
   };
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'products', label: 'Account Products', icon: Layers },
     { id: 'services', label: 'Additional Services', icon: Smartphone },
+    { id: 'business', label: 'Business Accounts', icon: Building2 },
   ];
 
   return (
@@ -55,6 +58,7 @@ export default function ProductsAndServicesPage() {
       {/* Both stay mounted so unsaved edits survive switching tabs */}
       <div className={tab === 'products' ? '' : 'hidden'}><AccountProductsManager /></div>
       <div className={tab === 'services' ? '' : 'hidden'}><AdditionalServicesManager /></div>
+      <div className={tab === 'business' ? '' : 'hidden'}><CorporateCatalogManager /></div>
     </div>
   );
 }

@@ -46,6 +46,7 @@ const ACTION_LABELS: Record<string, string> = {
   LOCK: 'User locked', UNLOCK: 'User unlocked', PASSWORD_RESET: 'Password reset',
   SERVICES_COMPLETED: 'Services set up', SCREENING_CHECK: 'Screening check', SCREENING_MATCH: 'Screening match',
   SCREENING_CLEAR: 'Screening clear',
+  INVITE: 'Verification link sent', VERIFY: 'Verified with Fayda', DOCUMENT_REVIEW: 'Document checked',
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -55,7 +56,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const MODULE_LABELS: Record<string, string> = {
-  AUTH: 'Sign-in', APPLICATION: 'Application', CUSTOMER: 'Customer', SERVICES: 'Services', USER: 'Users',
+  AUTH: 'Sign-in', APPLICATION: 'Application', CUSTOMER: 'Customer', CORPORATE: 'Corporate account', SERVICES: 'Services', USER: 'Users',
   SETTINGS: 'Settings', REFERRAL: 'Referral', SANCTIONS: 'Sanctions', PEP: 'PEP', SCREENING: 'Screening',
   AUDIT: 'Audit log', SYSTEM: 'System',
 };

@@ -2,7 +2,7 @@
 // (kept free of mongoose so client components can import it).
 
 export const AUDIT_MODULES = [
-  'AUTH', 'APPLICATION', 'CUSTOMER', 'SERVICES', 'USER', 'SETTINGS', 'REFERRAL',
+  'AUTH', 'APPLICATION', 'CUSTOMER', 'CORPORATE', 'SERVICES', 'USER', 'SETTINGS', 'REFERRAL',
   'SANCTIONS', 'PEP', 'SCREENING', 'AUDIT', 'SYSTEM',
 ] as const;
 export type AuditModule = typeof AUDIT_MODULES[number];
@@ -21,6 +21,8 @@ export const AUDIT_ACTIONS = [
   'SERVICES_COMPLETED',
   // Screening
   'SCREENING_CHECK', 'SCREENING_MATCH', 'SCREENING_CLEAR',
+  // Corporate accounts: SMS verification links, Fayda verification of each person, document checks
+  'INVITE', 'VERIFY', 'DOCUMENT_REVIEW',
 ] as const;
 export type AuditAction = typeof AUDIT_ACTIONS[number];
 

@@ -21,6 +21,7 @@ export async function getAccountProducts(): Promise<IAccountProduct[]> {
 export async function findAccountClass(
   productId: string, classCode: string
 ): Promise<{ product: IAccountProduct; accountClass: IAccountClass } | null> {
+  // (callers check `active` and `audience` where it matters)
   if (!productId || !classCode) return null;
   const product = (await getAccountProducts()).find(p => p.id === productId);
   const accountClass = product?.classes.find(c => c.code.toUpperCase() === classCode.toUpperCase());

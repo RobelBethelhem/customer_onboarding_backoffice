@@ -21,6 +21,7 @@ interface AccountProduct {
   name: string;
   description: string;
   isIFB: boolean;
+  audience?: 'individual' | 'organization' | 'both';
   active: boolean;
   classes: AccountClass[];
 }
@@ -168,7 +169,7 @@ export default function AccountProductsManager() {
             </button>
           )}
           <button type="button"
-            onClick={() => update([...products, { id: '', name: 'New product', description: '', isIFB: false, active: true, classes: [emptyClass()] }])}
+            onClick={() => update([...products, { id: '', name: 'New product', description: '', isIFB: false, audience: 'individual', active: true, classes: [emptyClass()] }])}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
             <Plus className="w-4 h-4" /> Add product
           </button>
@@ -201,6 +202,13 @@ export default function AccountProductsManager() {
                 onChange={e => setProduct(pi, { description: e.target.value })} />
             </div>
             <div className="flex items-center gap-4 flex-wrap">
+              <select value={p.audience || 'individual'} title="Who can open this product"
+                onChange={e => setProduct(pi, { audience: e.target.value as AccountProduct['audience'] })}
+                className="px-2 py-1.5 border border-gray-200 rounded-md text-sm bg-white">
+                <option value="individual">For individuals</option>
+                <option value="organization">For organizations</option>
+                <option value="both">For both</option>
+              </select>
               <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
                 <input type="checkbox" checked={p.isIFB} onChange={() => setProduct(pi, { isIFB: !p.isIFB })}
                   className="w-4 h-4 accent-emerald-600" />

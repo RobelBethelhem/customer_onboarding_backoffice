@@ -19,11 +19,15 @@ export async function OPTIONS() {
  * GET /api/account-products — public. Active products with their active account classes, in the
  * order set on the Account Products page, for the web app's Account Type step.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  // ?for=organization: products organizations can open (business account wizard); default individuals
+  const forOrganizations = new URL(request.url).searchParams.get('for') === 'organization';
+  const offered = (audience?: string) => (audience || 'individual') === 'both'
+    || (audience || 'individual') === (forOrganizations ? 'organization' : 'individual');
   try {
     await connectToDatabase();
     const products = (await getAccountProducts())
-      .filter(p => p.active)
+      .filter(p => p.active && offered(p.audience))
       .map(p => ({
         id: p.id,
         name: p.name,

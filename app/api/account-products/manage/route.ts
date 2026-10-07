@@ -87,13 +87,14 @@ export async function PUT(request: NextRequest) {
         id, name, classes,
         description: String(p?.description ?? '').trim().slice(0, 300),
         isIFB: p?.isIFB === true,
+        audience: ['individual', 'organization', 'both'].includes(p?.audience) ? p.audience : 'individual',
         active: p?.active !== false,
       });
     }
 
     // Audit: one line per product / class that was added, removed, changed or moved
     const flatten = (list: IAccountProduct[]) => new Map(list.flatMap((p, pi) => [
-      [`product ${p.id}`, `#${pi + 1} ${p.name}${p.isIFB ? ' (IFB)' : ''} · ${p.active ? 'active' : 'inactive'}`] as [string, string],
+      [`product ${p.id}`, `#${pi + 1} ${p.name}${p.isIFB ? ' (IFB)' : ''} · for ${p.audience || 'individual'} · ${p.active ? 'active' : 'inactive'}`] as [string, string],
       ...p.classes.map((c, ci) => [`class ${c.code}`, `${p.name} #${ci + 1} · ${describeClass(c)}`] as [string, string]),
     ]));
     const before = flatten(await getAccountProducts());

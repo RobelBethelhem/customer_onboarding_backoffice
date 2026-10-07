@@ -29,6 +29,9 @@ function isPublicApiRoute(method: string, pathname: string): boolean {
   if (pathname === '/api/branches' && method === 'GET') return true; // branch list for the web app
   if (pathname === '/api/account-products' && method === 'GET') return true; // product catalog for the web app
   if (pathname === '/api/additional-services' && method === 'GET') return true; // services catalog for the web app
+  // Business accounts from the web app (through the Fayda backend): catalog, uploads, submission,
+  // status page and SMS verification links. Each route checks its own key / Fayda verification.
+  if (pathname.startsWith('/api/corporate/public/') && (method === 'GET' || method === 'POST')) return true;
   if (pathname === '/api/referrals/verify' && method === 'POST') return true;
   if (
     pathname.startsWith('/api/referrals/') &&
