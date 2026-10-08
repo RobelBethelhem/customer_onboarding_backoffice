@@ -69,6 +69,7 @@ export interface CorporateApplication {
   documents: CorporateDocument[];
   screening: { organization?: ScreeningSummary };
   complianceHold: boolean;
+  screeningCheckedAt?: string;
   history: { at: string; by: string; action: string; note?: string }[];
   submittedAt: string; verifiedAt?: string;
   reviewedBy?: string; returnReason?: string; returnedBy?: string; returnedAt?: string;

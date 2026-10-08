@@ -72,22 +72,37 @@ export interface ScreenResult {
 
 const FULL_NAME_THRESHOLD = 80;
 
-export async function screenCustomer(input: ScreenInput): Promise<ScreenResult> {
-  const firstName = input.firstName || '';
-  const middleName = input.middleName || '';
-  const lastName = input.lastName || '';
-  const dateOfBirth = input.dateOfBirth;
-  const customerFullName = (input.fullName || `${firstName} ${middleName} ${lastName}`).replace(/\s+/g, ' ').trim();
+/** The active screening lists (sanctions, PEP, NBE …) and each source's risk score */
+export interface ScreeningLists {
+  sanctions: any[];
+  sourceRiskMap: Record<string, number>;
+}
 
+export async function loadScreeningLists(): Promise<ScreeningLists> {
   const sanctions = await SanctionEntry.find({ status: 'ACTIVE', isDeleted: false }).lean();
   const sources = await SanctionSource.find({}).lean();
   const sourceRiskMap: Record<string, number> = {};
   for (const s of sources as any[]) {
     sourceRiskMap[s.sourceId] = typeof s.riskScore === 'number' ? s.riskScore : 50;
   }
+  return { sanctions: sanctions as any[], sourceRiskMap };
+}
+
+export async function screenCustomer(input: ScreenInput): Promise<ScreenResult> {
+  return screenAgainst(await loadScreeningLists(), input);
+}
+
+/** Screen one person against lists loaded once (several people of one application) */
+export function screenAgainst(lists: ScreeningLists, input: ScreenInput): ScreenResult {
+  const firstName = input.firstName || '';
+  const middleName = input.middleName || '';
+  const lastName = input.lastName || '';
+  const dateOfBirth = input.dateOfBirth;
+  const customerFullName = (input.fullName || `${firstName} ${middleName} ${lastName}`).replace(/\s+/g, ' ').trim();
+  const { sanctions, sourceRiskMap } = lists;
 
   const matches: any[] = [];
-  for (const entry of sanctions as any[]) {
+  for (const entry of sanctions) {
     const matchedFields: string[] = [];
     const fullNameScore = calculateSimilarity(customerFullName, entry.fullName);
     const firstNameScore = calculateSimilarity(firstName, entry.firstName);

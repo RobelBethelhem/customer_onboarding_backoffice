@@ -138,6 +138,7 @@ export interface ICorporateApplication extends Document {
   documents: ICorporateDocument[];
   screening: Record<string, any>;
   complianceHold: boolean;
+  screeningCheckedAt?: Date;    // last time everyone (and the organization) was screened again
   history: { at: Date; by: string; action: string; note?: string }[];
   submittedAt: Date;
   verifiedAt?: Date;
@@ -300,6 +301,7 @@ const CorporateApplicationSchema = new Schema<ICorporateApplication>({
   documents: { type: [DocumentSchema], default: [] },
   screening: { type: Schema.Types.Mixed, default: () => ({}) },
   complianceHold: { type: Boolean, default: false },
+  screeningCheckedAt: { type: Date },
   history: { type: [{ at: Date, by: String, action: String, note: String, _id: false }], default: [] },
   submittedAt: { type: Date, default: Date.now },
   verifiedAt: { type: Date },

@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import CorporateFile, { ICorporateFile } from '@/lib/models/CorporateFile';
-import { screenCustomer } from '@/lib/sanctionsScreening';
+import { screenCustomer, screenAgainst, loadScreeningLists, ScreeningLists, ScreenResult, ScreenInput } from '@/lib/sanctionsScreening';
 import { sendSMS } from '@/lib/sms';
 import CorporateApplication, {
   ICorporateApplication, ICorporatePerson, CorporateRole, SigningRule,
@@ -62,6 +62,13 @@ export function approvalBlockers(app: ICorporateApplication, rules: ICorporateRu
   const sigs = app.people.filter(p => p.roles.includes('signatory') && (rules.signatureRequired || p.signature)
     && p.signature?.review?.status !== 'accepted');
   if (sigs.length) blockers.push(`Specimen signatures not accepted: ${sigs.map(p => p.verification?.fullName || p.fullName).join(', ')}`);
+  // Nobody is approved unscreened: a screening that could not run must be run again
+  const unscreened = [
+    ...app.people.filter(p => p.verification?.status === 'verified' && screeningFailed(p.verification.screening))
+      .map(p => p.verification.fullName || p.fullName),
+    ...(screeningFailed(app.screening?.organization) ? [`the organization name (${app.organization.name})`] : []),
+  ];
+  if (unscreened.length) blockers.push(`PEP / sanctions screening could not run for ${unscreened.join(', ')} — press "Re-run screening"`);
   return blockers;
 }
 
@@ -197,28 +204,91 @@ export interface ScreeningSummary {
   error?: string;
 }
 
+const screenInput = (fullName: string, dateOfBirth?: string): ScreenInput => {
+  const parts = fullName.trim().split(/\s+/);
+  return {
+    fullName,
+    firstName: parts.length > 1 ? parts[0] : '',
+    middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : '',
+    lastName: parts.length > 1 ? parts[parts.length - 1] : '',
+    dateOfBirth,
+  };
+};
+
+const summarize = (s: ScreenResult): ScreeningSummary => ({
+  status: s.status, riskLevel: s.riskLevel, hasPEP: s.hasPEP, blocked: s.blocked, checkedAt: new Date(),
+  matches: s.matches.slice(0, 5).map(m => ({
+    fullName: m.fullName, sanctionType: m.sanctionType, sourceId: m.sourceId,
+    matchScore: m.matchScore, matchStrength: m.matchStrength, reason: m.reason,
+  })),
+});
+
+const screeningError = (e: any): ScreeningSummary => {
+  console.error('[Corporate] Screening failed:', e?.message || e);
+  return { status: 'ERROR', riskLevel: 'UNKNOWN', hasPEP: false, blocked: false, matches: [], checkedAt: new Date(), error: 'Screening could not run' };
+};
+
 /** PEP / sanctions screening of a person (Fayda name and birth date) or of the organization's name */
 export async function screenName(fullName: string, dateOfBirth?: string): Promise<ScreeningSummary> {
   try {
-    const parts = fullName.trim().split(/\s+/);
-    const s = await screenCustomer({
-      fullName,
-      firstName: parts.length > 1 ? parts[0] : '',
-      middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : '',
-      lastName: parts.length > 1 ? parts[parts.length - 1] : '',
-      dateOfBirth,
-    });
-    return {
-      status: s.status, riskLevel: s.riskLevel, hasPEP: s.hasPEP, blocked: s.blocked, checkedAt: new Date(),
-      matches: s.matches.slice(0, 5).map(m => ({
-        fullName: m.fullName, sanctionType: m.sanctionType, sourceId: m.sourceId,
-        matchScore: m.matchScore, matchStrength: m.matchStrength, reason: m.reason,
-      })),
-    };
+    return summarize(await screenCustomer(screenInput(fullName, dateOfBirth)));
   } catch (e: any) {
-    console.error('[Corporate] Screening failed:', e.message);
-    return { status: 'ERROR', riskLevel: 'UNKNOWN', hasPEP: false, blocked: false, matches: [], checkedAt: new Date(), error: 'Screening could not run' };
+    return screeningError(e);
   }
+}
+
+/** Not screened, or the screening could not run: approval waits for a successful one */
+export const screeningFailed = (s?: { status?: string } | null) => !s || s.status === 'ERROR';
+
+/** Who matched the screening (for staff), e.g. "ABEBE KEBEDE (PEP)", "the organization (sanctions)" */
+export function screeningMatches(app: Pick<ICorporateApplication, 'people' | 'screening'>): string[] {
+  const kind = (s: any) => [s?.blocked && 'sanctions', s?.hasPEP && 'PEP'].filter(Boolean).join(' + ');
+  return [
+    ...app.people.filter(p => screeningHold(p.verification?.screening))
+      .map(p => `${p.verification.fullName || p.fullName} (${kind(p.verification.screening)})`),
+    ...(screeningHold(app.screening?.organization) ? [`the organization name (${kind(app.screening.organization)})`] : []),
+  ];
+}
+
+/**
+ * Screen everyone who verified, and the organization's name, again — the lists change while an
+ * application waits (links work for days). Results are stored; a match puts the application on
+ * compliance hold (KYC can then only escalate). A hold is never lifted here.
+ */
+export async function rescreenApplication(app: ICorporateApplication, by: string, why: string) {
+  let lists: ScreeningLists | null = null;
+  let loadError: any = null;
+  try { lists = await loadScreeningLists(); } catch (e) { loadError = e; }
+  const screen = (fullName: string, dob?: string): ScreeningSummary => {
+    if (!lists) return screeningError(loadError);
+    try { return summarize(screenAgainst(lists, screenInput(fullName, dob))); } catch (e) { return screeningError(e); }
+  };
+
+  const set: Record<string, any> = {};
+  const failed: string[] = [];
+  app.people.forEach((p, i) => {
+    if (p.verification?.status !== 'verified') return;
+    const name = p.verification.fullName || p.fullName;
+    const s = screen(name, p.verification.dateOfBirth);
+    set[`people.${i}.verification.screening`] = s;
+    p.verification.screening = s;
+    if (s.status === 'ERROR') failed.push(name);
+  });
+  const org = screen(app.organization.name);
+  set['screening.organization'] = org;
+  app.screening = { ...(app.screening || {}), organization: org };
+  if (org.status === 'ERROR') failed.push('the organization name');
+
+  const matches = screeningMatches(app);
+  const complianceHold = app.complianceHold || matches.length > 0;
+  set.complianceHold = complianceHold;
+  set.screeningCheckedAt = new Date();
+  const note = matches.length ? `Match: ${matches.join(', ')}` : failed.length ? `Could not run for: ${failed.join(', ')}` : 'No match';
+  await CorporateApplication.updateOne({ _id: app._id }, {
+    $set: set,
+    $push: { history: { at: new Date(), by, action: `PEP / sanctions screening run again (${why})`, note } },
+  });
+  return { matches, failed, complianceHold, newHold: complianceHold && !app.complianceHold };
 }
 
 /** A PEP or sanctions match: KYC cannot approve, only escalate to a Senior Approver */

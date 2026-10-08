@@ -11,7 +11,7 @@ import { audit, AuditEvent } from '@/lib/audit';
 import type { AuditAction, AuditStatus } from '@/lib/auditTypes';
 import {
   approvalBlockers, resendInvite, roleText, screeningHold, statusLink, SIGNING_RULES,
-  smsApproved, smsRejected, smsReturned, text,
+  smsApproved, smsRejected, smsReturned, text, rescreenApplication, screeningMatches,
 } from '@/lib/corporate';
 
 export const dynamic = 'force-dynamic';
@@ -79,6 +79,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  *   resend_invite { personId }               new verification link by SMS
  *   return { reason }                        back to the applicant to replace rejected files
  *   reject { reason } · escalate { reason } · approve · release
+ *   rescreen   run the PEP / sanctions screening of everyone and the organization again (also done
+ *              automatically when the review starts and just before approval)
  * KYC officers act on pending / in-review applications, Senior Approvers on escalated ones; admin
  * can only resend links (no decisions, as for individual accounts).
  */
@@ -98,7 +100,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     const auditAction: AuditAction =
       action === 'approve' ? 'APPROVE' : action === 'reject' ? 'REJECT' : action === 'return' ? 'RETURN'
-      : action === 'escalate' ? 'ESCALATE' : action === 'review' ? 'REVIEW'
+      : action === 'escalate' ? 'ESCALATE' : action === 'review' ? 'REVIEW' : action === 'rescreen' ? 'SCREEN'
       : action === 'document' || action === 'signature' ? 'DOCUMENT_REVIEW'
       : action === 'resend_invite' ? 'INVITE' : 'UPDATE';
     const log = (description: string, status: AuditStatus = 'SUCCESS', extra: Partial<AuditEvent> = {}) => audit(request, {
@@ -134,7 +136,20 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         { $set: { status: 'in_review', reviewedBy: actor, reviewedAt: new Date() }, $push: { history: entry('Review started') } }
       );
       if (!r.modifiedCount) return changed();
-      return done('Started review');
+      // The lists may have changed since the people verified: screen everyone again now
+      const s = await rescreenApplication(app, actor, 'review started');
+      return done(`Started review — screening run again: ${screeningNote(s)}`);
+    }
+
+    // ── PEP / sanctions screening again (the lists change while an application waits) ──────
+    if (action === 'rescreen') {
+      const allowed = role === 'admin'
+        ? !['approving', 'approved', 'rejected'].includes(app.status)
+        : role === 'senior_approver' ? escalated
+        : role === 'kyc' && ['awaiting_verification', 'pending', 'in_review', 'returned'].includes(app.status);
+      if (!allowed) return refuse('The screening cannot be run again on this application now', 403);
+      const s = await rescreenApplication(app, actor, 'requested');
+      return done(`PEP / sanctions screening run again: ${screeningNote(s)}`);
     }
 
     // ── One document / signature ────────────────────────────────────────────────────────────
@@ -242,7 +257,21 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (action === 'approve') {
       if (!mayDecide) return refuse(decisionError, 403);
       if (!escalated && app.complianceHold) {
-        return refuse('PEP / sanctions match: a KYC officer cannot approve this application. Please escalate it to a Senior Approver.', 403);
+        return refuse(`PEP / sanctions match${matchList(app)}: a KYC officer cannot approve this application. Please escalate it to a Senior Approver.`, 403);
+      }
+      // Screen everyone once more right before the account is opened
+      const s = await rescreenApplication(app, actor, 'before approval');
+      if (s.failed.length) {
+        await log(`Approval stopped: screening could not run for ${s.failed.join(', ')}`, 'FAILURE');
+        return NextResponse.json({ success: false, error: `The PEP / sanctions screening could not run for ${s.failed.join(', ')}. Please try again in a moment.` }, { status: 503 });
+      }
+      if (!escalated && s.complianceHold) {
+        await audit(request, {
+          module: 'CORPORATE', action: 'SCREEN', status: 'SUCCESS', entityType: 'CorporateApplication',
+          entityId: app.applicationId, entityName: app.organization.name,
+          description: `New PEP / sanctions match found just before approval: ${s.matches.join(', ')} — must be escalated to a Senior Approver`,
+        });
+        return refuse(`New PEP / sanctions match found just before approval: ${s.matches.join(', ')}. A KYC officer cannot approve it — please escalate it to a Senior Approver.`, 409);
       }
       const blockers = approvalBlockers(app, rules);
       if (blockers.length) return refuse(`Not ready to approve: ${blockers.join('; ')}`, 400);
@@ -361,4 +390,17 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     console.error('[Corporate] Action error:', error);
     return NextResponse.json({ success: false, error: 'Failed to update the application', detail: String(error?.message || error).slice(0, 300) }, { status: 500 });
   }
+}
+
+/** Short result of a screening run, for audit descriptions */
+function screeningNote(s: { matches: string[]; failed: string[]; newHold: boolean }) {
+  if (s.failed.length) return `could not run for ${s.failed.join(', ')}`;
+  if (s.matches.length) return `match — ${s.matches.join(', ')}${s.newHold ? ' (new: now on compliance hold, must be escalated)' : ''}`;
+  return 'no match';
+}
+
+/** " (ABEBE KEBEDE (PEP), …)" — who matched, for messages to staff */
+function matchList(app: ICorporateApplication) {
+  const m = screeningMatches(app);
+  return m.length ? ` (${m.join(', ')})` : '';
 }

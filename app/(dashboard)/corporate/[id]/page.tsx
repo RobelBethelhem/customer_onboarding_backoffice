@@ -72,8 +72,9 @@ function ScreeningResult({ s, label }: { s?: ScreeningSummary; label: string }) 
   const hit = s.hasPEP || s.blocked;
   return (
     <div className={`p-3 rounded-lg border text-sm ${s.status === 'ERROR' ? 'bg-amber-50 border-amber-200 text-amber-800' : hit ? 'bg-purple-50 border-purple-200 text-purple-900' : s.status === 'MATCHED' ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-green-50 border-green-200 text-green-800'}`}>
-      <p className="font-medium flex items-center gap-1.5">
-        <Shield className="w-4 h-4" /> {label}: {s.status === 'ERROR' ? 'screening could not run' : s.status === 'CLEAR' ? 'no match' : `${s.matches.length} possible match${s.matches.length === 1 ? '' : 'es'} (risk ${s.riskLevel})${s.hasPEP ? ' — PEP' : ''}${s.blocked ? ' — sanctions' : ''}`}
+      <p className="font-medium flex items-center gap-1.5 flex-wrap">
+        <Shield className="w-4 h-4" /> {label}: {s.status === 'ERROR' ? 'screening could not run — run it again' : s.status === 'CLEAR' ? 'no match' : `${s.matches.length} possible match${s.matches.length === 1 ? '' : 'es'} (risk ${s.riskLevel})${s.hasPEP ? ' — PEP' : ''}${s.blocked ? ' — sanctions' : ''}`}
+        {s.checkedAt && <span className="text-xs font-normal opacity-70">· checked {new Date(s.checkedAt).toLocaleString()}</span>}
       </p>
       {s.matches.length > 0 && (
         <ul className="mt-1.5 space-y-0.5">
@@ -162,6 +163,17 @@ export default function CorporateApplicationPage() {
   const kycStage = app.status === 'pending' || app.status === 'in_review';
   const mayDecide = escalated ? isSenior : isKyc && kycStage;
   const canApprove = mayDecide && (escalated || !app.complianceHold);
+  const canRescreen = role === 'admin' ? !['approving', 'approved', 'rejected'].includes(app.status)
+    : isSenior ? escalated
+    : isKyc && ['awaiting_verification', 'pending', 'in_review', 'returned'].includes(app.status);
+  // who matched the PEP / sanctions lists
+  const hitKind = (s?: ScreeningSummary) => [s?.blocked && 'sanctions', s?.hasPEP && 'PEP'].filter(Boolean).join(' + ');
+  const screeningHits = [
+    ...app.people.filter(p => p.verification?.screening && (p.verification.screening.hasPEP || p.verification.screening.blocked))
+      .map(p => `${p.verification.fullName || p.fullName} (${hitKind(p.verification.screening)}${p.isApplicant ? ', applicant' : ''})`),
+    ...(app.screening?.organization && (app.screening.organization.hasPEP || app.screening.organization.blocked)
+      ? [`the organization name (${hitKind(app.screening.organization)})`] : []),
+  ];
   const hasRejected = app.documents.some(d => d.review?.status === 'rejected') || app.people.some(p => p.signature?.review?.status === 'rejected');
   const disabled = !!busy;
   const verified = app.people.filter(p => p.verification?.status === 'verified').length;
@@ -361,6 +373,13 @@ export default function CorporateApplicationPage() {
             <span className="flex items-center gap-2 px-3 py-2 text-purple-700 bg-purple-50 rounded-lg text-sm font-medium"><Shield className="w-4 h-4" /> Screening match — escalate to approve</span>
           )}
           {escalated && !isSenior && <span className="px-3 py-2 text-purple-700 bg-purple-50 rounded-lg text-sm font-medium">Waiting for a Senior Approver</span>}
+          {canRescreen && (
+            <button onClick={() => act('rescreen', {}, 'rescreen')} disabled={disabled}
+              title="Screen everyone who verified, and the organization name, against the current PEP / sanctions lists"
+              className="flex items-center gap-2 px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50">
+              {busy === 'rescreen' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />} Re-run screening
+            </button>
+          )}
           {app.approvalStale && (isKyc || isSenior) && (
             <button onClick={() => act('release', {}, 'release')} disabled={disabled} className="flex items-center gap-2 px-4 py-2 text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50">
               <RotateCcw className="w-4 h-4" /> Release unfinished approval
@@ -378,7 +397,15 @@ export default function CorporateApplicationPage() {
           <Shield className="w-5 h-5 text-purple-600 mt-0.5 shrink-0" />
           <div className="text-sm text-purple-800">
             <p className="font-medium text-purple-900">PEP / sanctions screening match</p>
-            The organization or one of its people matched the screening list. A KYC officer cannot approve it — escalate it to a Senior Approver.
+            {screeningHits.length > 0
+              ? <p><b>{screeningHits.join(', ')}</b> matched the screening lists (details on each person below).</p>
+              : <p>A screening match was found earlier on this application.</p>}
+            <p className="mt-1">
+              {escalated
+                ? 'Escalated: a Senior Approver decides (approve, return or reject).'
+                : 'A KYC officer cannot approve it — check the matches, then escalate it to a Senior Approver (or reject it).'}
+              {app.screeningCheckedAt && ` Screening last run ${new Date(app.screeningCheckedAt).toLocaleString()}.`}
+            </p>
           </div>
         </div>
       )}

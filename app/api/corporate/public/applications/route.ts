@@ -13,7 +13,7 @@ import { audit } from '@/lib/audit';
 import {
   bad, text, newSecret, hashSecret, normalizeMobile, nextCorporateId, loadUploads, fileRef, claimUploads, releaseUploads,
   inviteLink, statusLink, smsInvite, smsSubmitted, personActor, publicView, screenName, screeningHold, SIGNING_RULES,
-  matchesHash, maskPhone,
+  matchesHash, maskPhone, screeningMatches,
 } from '@/lib/corporate';
 
 export const dynamic = 'force-dynamic';
@@ -221,6 +221,7 @@ export async function POST(request: Request) {
     // PEP / sanctions screening: the organization's name now, each person when they verify
     const organizationScreening = await screenName(name);
     const complianceHold = screeningHold(organizationScreening) || people.some(p => screeningHold(p.verification?.screening));
+    const matched = screeningMatches({ people, screening: { organization: organizationScreening } } as any);
 
     // Interest-free accounts open in the IFB counterpart of the chosen branch (e.g. 164 → 664)
     let branchCode = branch.conventionalCode;
@@ -280,10 +281,16 @@ export async function POST(request: Request) {
       people, documents,
       screening: { organization: organizationScreening },
       complianceHold,
-      history: [{
-        at: new Date(), by: people[0].fullName, action: 'Submitted',
-        note: (everyoneVerified ? 'Sent to KYC' : 'Waiting for verification') + (peopleNote ? ` — ${peopleNote}` : ''),
-      }],
+      history: [
+        {
+          at: new Date(), by: people[0].fullName, action: 'Submitted',
+          note: (everyoneVerified ? 'Sent to KYC' : 'Waiting for verification') + (peopleNote ? ` — ${peopleNote}` : ''),
+        },
+        ...(matched.length ? [{
+          at: new Date(), by: 'SYSTEM', action: 'PEP / sanctions screening match',
+          note: `${matched.join(', ')} — KYC cannot approve; escalate to a Senior Approver`,
+        }] : []),
+      ],
       submittedAt: new Date(),
       verifiedAt: everyoneVerified ? new Date() : undefined,
     };
@@ -330,7 +337,7 @@ export async function POST(request: Request) {
         + `${product.name} / ${accountClass.name}, ${people.length} ${people.length === 1 ? 'person' : 'people'}, `
         + `${documents.filter(d => d.file).length} document(s)`
         + (peopleNote ? `; ${peopleNote}` : '')
-        + (complianceHold ? ' — screening match: KYC must escalate to a Senior Approver' : ''),
+        + (complianceHold ? ` — PEP / sanctions match: ${matched.join(', ')} — KYC must escalate to a Senior Approver` : ''),
       actor: personActor(people[0].fullName),
     });
 

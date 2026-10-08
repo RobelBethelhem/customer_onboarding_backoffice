@@ -22,7 +22,7 @@ export const AUDIT_ACTIONS = [
   // Screening
   'SCREENING_CHECK', 'SCREENING_MATCH', 'SCREENING_CLEAR',
   // Corporate accounts: SMS verification links, Fayda verification of each person, document checks
-  'INVITE', 'VERIFY', 'DOCUMENT_REVIEW',
+  'INVITE', 'VERIFY', 'DOCUMENT_REVIEW', 'SCREEN',
 ] as const;
 export type AuditAction = typeof AUDIT_ACTIONS[number];
 

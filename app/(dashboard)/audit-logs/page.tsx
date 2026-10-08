@@ -47,6 +47,7 @@ const ACTION_LABELS: Record<string, string> = {
   SERVICES_COMPLETED: 'Services set up', SCREENING_CHECK: 'Screening check', SCREENING_MATCH: 'Screening match',
   SCREENING_CLEAR: 'Screening clear',
   INVITE: 'Verification link sent', VERIFY: 'Verified with Fayda', DOCUMENT_REVIEW: 'Document checked',
+  SCREEN: 'PEP / sanctions screening',
 };
 
 const ROLE_LABELS: Record<string, string> = {
