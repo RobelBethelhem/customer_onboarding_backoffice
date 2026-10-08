@@ -1,3 +1,4 @@
+import { applyNoDebit, noDebitNote } from '@/lib/noDebit';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
@@ -371,30 +372,10 @@ export async function PATCH(
       }
 
 
-      //flagged AC_STAT_NO_DR = 'Y' in STTM_CUST_ACCOUNT so no debit can occur
-
-      if( accountNumber && flexcubeEnabled){
-        const FAYDA_BACKEND_URL = process.env.FAYDA_BACKEND_URL || 'http://localhost:5000';
-        try{
-          const noDebitRes = await fetch(`${FAYDA_BACKEND_URL}/api/flexcube/set-no-debit`,{
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json'},
-            body: JSON.stringify({accountNumber}),
-          })
-
-          const noDebitData = await noDebitRes.json();
-
-          if(noDebitData.success){
-            console.log(`[NoDebit] Account ${accountNumber} flagged as No-Debit`);
-
-          }
-          else{
-            console.error(`[NoDebit] failed to set No-Debit: ${noDebitData.error}`)
-          }
-        }
-        catch (err: any){
-          console.error(`[NoDebit] Error calling Fayda backend : `, err.message)
-        }
+      // No-Debit until the branch activates the account — if the account product says so
+      // (Products & Services → Account Products; on by default for individuals)
+      if (accountNumber && flexcubeEnabled) {
+        customer.noDebit = await applyNoDebit(accountNumber, customer.accountTypeId || '', 'individual');
       }
 
       // ========== REFERRAL REWARD DISTRIBUTION ==========
@@ -566,7 +547,7 @@ export async function PATCH(
         'isExistingCustomer', 'existingCif', 'existingAccountNumber', 'existingCifCheck',
         // what the customer asked for, and the Personal Banker's record of setting it up
         'requestedServices', 'servicesStatus', 'completedServices', 'serviceNotifications', 'requestedServiceDetails',
-        'faceVerification', 'livenessFrames',
+        'faceVerification', 'livenessFrames', 'noDebit',
       ];
       for (const k of blocked) delete body[k];
       generalChanges = fieldChanges(customer.toObject(), body, Object.keys(body).filter(k => k !== 'action'));
@@ -585,7 +566,7 @@ export async function PATCH(
 
     await logDecision(
       auditAction === 'APPROVE'
-        ? `Approved — CIF ${customer.cifNumber}, account ${customer.accountNumber}${customer.isExistingCustomer ? ' (existing CIF, account only)' : ''}${approvalNote}`
+        ? `Approved — CIF ${customer.cifNumber}, account ${customer.accountNumber}${customer.isExistingCustomer ? ' (existing CIF, account only)' : ''}${approvalNote}${customer.noDebit ? ` · ${noDebitNote(customer.noDebit)}` : ''}`
         : auditAction === 'REJECT' ? `Rejected: ${customer.rejectionReason}`
         : auditAction === 'REVIEW' ? 'Started review'
         : auditAction === 'RETURN' ? `Returned to applicant: ${customer.returnReason}`

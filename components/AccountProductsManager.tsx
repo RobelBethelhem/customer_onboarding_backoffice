@@ -22,6 +22,8 @@ interface AccountProduct {
   description: string;
   isIFB: boolean;
   audience?: 'individual' | 'organization' | 'both';
+  noDebit?: boolean;              // No-Debit after opening, individuals (missing = on)
+  noDebitOrganizations?: boolean; // No-Debit after opening, organizations (missing = off)
   active: boolean;
   classes: AccountClass[];
 }
@@ -155,7 +157,9 @@ export default function AccountProductsManager() {
         <div>
           <p className="text-sm text-gray-500">
             The account types and classes customers can choose in the web app. Turn items off to hide them, use the
-            arrows to change the order.
+            arrows to change the order. <b>No-Debit</b>: when on, a new account of the product is flagged No-Debit in
+            FlexCube after it opens (nothing can be debited until the branch activates it) — on by default for
+            individuals, off for organizations.
             {meta.updatedAt && (
               <> Last changed {new Date(meta.updatedAt).toLocaleString()}{meta.updatedBy ? ` by ${meta.updatedBy}` : ''}.</>
             )}
@@ -169,7 +173,7 @@ export default function AccountProductsManager() {
             </button>
           )}
           <button type="button"
-            onClick={() => update([...products, { id: '', name: 'New product', description: '', isIFB: false, audience: 'individual', active: true, classes: [emptyClass()] }])}
+            onClick={() => update([...products, { id: '', name: 'New product', description: '', isIFB: false, audience: 'individual', noDebit: true, noDebitOrganizations: false, active: true, classes: [emptyClass()] }])}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
             <Plus className="w-4 h-4" /> Add product
           </button>
@@ -214,6 +218,21 @@ export default function AccountProductsManager() {
                   className="w-4 h-4 accent-emerald-600" />
                 IFB (interest-free)
               </label>
+              {(p.audience || 'individual') !== 'organization' && (
+                <span className="flex items-center gap-2 text-sm text-gray-700"
+                  title="After an individual's account of this product opens, flag it No-Debit in FlexCube until the branch activates it">
+                  <Toggle on={p.noDebit !== false} onChange={() => setProduct(pi, { noDebit: p.noDebit === false })} label="No-Debit for individuals" />
+                  {p.audience === 'both' ? 'No-Debit (individuals)' : 'No-Debit'}
+                </span>
+              )}
+              {['organization', 'both'].includes(p.audience || 'individual') && (
+                <span className="flex items-center gap-2 text-sm text-gray-700"
+                  title="After an organization's account of this product opens, flag it No-Debit in FlexCube until the branch activates it">
+                  <Toggle on={p.noDebitOrganizations === true} onChange={() => setProduct(pi, { noDebitOrganizations: p.noDebitOrganizations !== true })}
+                    label="No-Debit for organizations" />
+                  {p.audience === 'both' ? 'No-Debit (organizations)' : 'No-Debit'}
+                </span>
+              )}
               <span className="flex items-center gap-2 text-sm text-gray-700">
                 <Toggle on={p.active} onChange={() => setProduct(pi, { active: !p.active })} label="Active" />
                 {p.active ? 'Active' : 'Inactive'}

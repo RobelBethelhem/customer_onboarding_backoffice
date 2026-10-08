@@ -70,6 +70,7 @@ export interface CorporateApplication {
   screening: { organization?: ScreeningSummary };
   complianceHold: boolean;
   screeningCheckedAt?: string;
+  noDebit?: { status: 'set' | 'not_required' | 'failed'; at?: string; error?: string }; // FlexCube No-Debit after opening
   history: { at: string; by: string; action: string; note?: string }[];
   submittedAt: string; verifiedAt?: string;
   reviewedBy?: string; returnReason?: string; returnedBy?: string; returnedAt?: string;

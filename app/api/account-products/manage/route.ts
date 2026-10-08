@@ -88,6 +88,9 @@ export async function PUT(request: NextRequest) {
         description: String(p?.description ?? '').trim().slice(0, 300),
         isIFB: p?.isIFB === true,
         audience: ['individual', 'organization', 'both'].includes(p?.audience) ? p.audience : 'individual',
+        // No-Debit after opening: individuals yes unless switched off, organizations no unless switched on
+        noDebit: p?.noDebit !== false,
+        noDebitOrganizations: p?.noDebitOrganizations === true,
         active: p?.active !== false,
       });
     }
@@ -95,6 +98,7 @@ export async function PUT(request: NextRequest) {
     // Audit: one line per product / class that was added, removed, changed or moved
     const flatten = (list: IAccountProduct[]) => new Map(list.flatMap((p, pi) => [
       [`product ${p.id}`, `#${pi + 1} ${p.name}${p.isIFB ? ' (IFB)' : ''} · for ${p.audience || 'individual'} · ${p.active ? 'active' : 'inactive'}`] as [string, string],
+      [`product ${p.id} No-Debit`, noDebitText(p)] as [string, string],
       ...p.classes.map((c, ci) => [`class ${c.code}`, `${p.name} #${ci + 1} · ${describeClass(c)}`] as [string, string]),
     ]));
     const before = flatten(await getAccountProducts());
@@ -118,4 +122,12 @@ export async function PUT(request: NextRequest) {
     console.error('[Products] Save error:', error);
     return NextResponse.json({ success: false, error: 'Failed to save account products' }, { status: 500 });
   }
+}
+
+/** No-Debit setting of a product, for the audit trail (defaults: individuals on, organizations off) */
+function noDebitText(p: IAccountProduct): string {
+  const audience = p.audience || 'individual';
+  const ind = `individuals ${p.noDebit !== false ? 'on' : 'off'}`;
+  const org = `organizations ${p.noDebitOrganizations === true ? 'on' : 'off'}`;
+  return audience === 'both' ? `${ind}, ${org}` : audience === 'organization' ? org : ind;
 }

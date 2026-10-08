@@ -1,3 +1,4 @@
+import { applyNoDebit, noDebitNote } from '@/lib/noDebit';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import CorporateApplication, { CorporateStatus, ICorporateApplication } from '@/lib/models/CorporateApplication';
@@ -364,23 +365,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       );
       console.log(`[Corporate] ${app.applicationId} ${app.organization.name} approved — ${flexcubeMessage}`);
 
-      // No debits until the account is activated at the branch (same as individual accounts)
-      if (flexcubeEnabled) {
-        const FAYDA_BACKEND_URL = process.env.FAYDA_BACKEND_URL || 'http://localhost:5000';
-        try {
-          const res = await fetch(`${FAYDA_BACKEND_URL}/api/flexcube/set-no-debit`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accountNumber }),
-          });
-          const data = await res.json();
-          if (data.success) console.log(`[NoDebit] Account ${accountNumber} flagged as No-Debit`);
-          else console.error(`[NoDebit] failed to set No-Debit: ${data.error}`);
-        } catch (err: any) {
-          console.error('[NoDebit] Error calling Fayda backend:', err.message);
-        }
-      }
+      // No-Debit until the branch activates the account — if the account product says so
+      // (Products & Services → Account Products; off by default for organizations)
+      const noDebit = flexcubeEnabled ? await applyNoDebit(accountNumber, app.accountTypeId, 'organization') : null;
+      if (noDebit) await CorporateApplication.updateOne({ _id: app._id }, { $set: { noDebit } });
       if (applicant?.phone) sendSMS(applicant.phone, smsApproved(app.organization.name, cifNumber, accountNumber, app.branch));
 
       return done(`Approved — CIF ${cifNumber}, account ${accountNumber}${setup.islamic ? ` (IFB, class ${setup.accountClass})` : ''}`
+        + (noDebit ? ` · ${noDebitNote(noDebit)}` : '')
         + `; ${app.people.length} people (${app.people.map(p => `${nameOf(p)}: ${roleText(p.roles)}`).join(', ')})`
         + (escalated ? ' — Senior Approver decision' : '') + (screeningHold({ hasPEP: pep }) ? ' — PEP involved' : ''));
     }

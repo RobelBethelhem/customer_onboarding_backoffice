@@ -1141,6 +1141,13 @@ export default function CustomerDetailPage() {
                 <div className="pt-3">
                   <p className="text-sm text-gray-500 mb-1">Account Number</p>
                   <p className="text-xl font-bold text-blue-600">{customer.accountNumber}</p>
+                  {customer.noDebit && (
+                <p className={`mt-1 text-xs font-medium ${customer.noDebit.status === 'failed' ? 'text-red-700' : customer.noDebit.status === 'set' ? 'text-amber-700' : 'text-gray-500'}`}>
+                  {customer.noDebit.status === 'set' ? 'No-Debit set in FlexCube — lift it when the branch activates the account'
+                    : customer.noDebit.status === 'not_required' ? 'No-Debit not set (account product setting)'
+                    : `No-Debit could not be set${customer.noDebit.error ? ` (${customer.noDebit.error})` : ''} — set it in FlexCube`}
+                </p>
+              )}
                 </div>
               )}
             </div>

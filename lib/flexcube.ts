@@ -586,8 +586,8 @@ function buildCreateCustomerEnvelope(data: CreateCIFRequest, config: FlexCubeCon
  * Build SOAP envelope for account creation:
  *   conventional        → FCUBSAccService / CreateCustAcc   (module ST)
  *   IFB (interest-free) → FCUBSIAService  / CreateIACustAcc (module IA), as in the core banking
- *   team's sample. Its body has no No-Debit flag, like the sample — No-Debit is set on every new
- *   account after approval (Fayda backend /api/flexcube/set-no-debit).
+ *   team's sample. Its body has no No-Debit flag, like the sample — No-Debit is set after approval
+ *   when the account product says so (lib/noDebit.ts → Fayda backend /api/flexcube/set-no-debit).
  */
 function buildCreateAccountEnvelope(data: CreateAccountRequest, config: FlexCubeConfig): string {
   const correlId = generateCorrelId();

@@ -1,3 +1,4 @@
+import { applyNoDebit, noDebitNote } from '@/lib/noDebit';
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
@@ -606,6 +607,13 @@ export async function POST(request: Request) {
           console.warn(`[Onboarding] Application ID taken, retrying as ${customerId}`);
         }
       }
+    }
+
+    // Auto-approved with a real account: No-Debit as for a KYC approval (product setting)
+    if (status === 'auto_approved' && accountNumber && settings.flexcubeEnabled) {
+      customer.noDebit = await applyNoDebit(accountNumber, String(body.accountTypeId || ''), 'individual');
+      await Customer.updateOne({ _id: customer._id }, { $set: { noDebit: customer.noDebit } });
+      workflowDecision += ` · ${noDebitNote(customer.noDebit)}`;
     }
 
     // Audit trail: the applicant's submission and, if it happened, the system's auto-approval

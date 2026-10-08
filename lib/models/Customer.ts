@@ -109,6 +109,7 @@ export interface ICustomer extends Document {
   customerNumber?: string;
   cifNumber?: string;
   accountNumber?: string;
+  noDebit?: { status: 'set' | 'not_required' | 'failed'; at?: Date; error?: string }; // FlexCube No-Debit after opening
   rejectionReason?: string;
   approvedBy?: string;
   rejectedBy?: string;
@@ -282,6 +283,9 @@ const CustomerSchema = new Schema<ICustomer>({
   customerNumber: { type: String },
   cifNumber: { type: String },
   accountNumber: { type: String },
+  noDebit: {
+    type: new Schema({ status: { type: String, enum: ['set', 'not_required', 'failed'] }, at: Date, error: String }, { _id: false }),
+  },
   rejectionReason: { type: String },
   approvedBy: { type: String },
   rejectedBy: { type: String },

@@ -160,6 +160,7 @@ export interface ICorporateApplication extends Document {
   cifNumber?: string;
   accountNumber?: string;
   flexcubeMessage?: string;
+  noDebit?: { status: 'set' | 'not_required' | 'failed'; at?: Date; error?: string }; // FlexCube No-Debit after opening
   resubmissionCount: number;
   createdAt: Date;
   updatedAt: Date;
@@ -323,6 +324,9 @@ const CorporateApplicationSchema = new Schema<ICorporateApplication>({
   cifNumber: { type: String },
   accountNumber: { type: String },
   flexcubeMessage: { type: String },
+  noDebit: {
+    type: new Schema({ status: { type: String, enum: ['set', 'not_required', 'failed'] }, at: Date, error: String }, { _id: false }),
+  },
   resubmissionCount: { type: Number, default: 0 },
 }, { timestamps: true });
 

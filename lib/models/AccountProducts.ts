@@ -19,6 +19,10 @@ export interface IAccountProduct {
   description: string;
   isIFB: boolean;               // interest-free: green theme, IFB branch codes
   audience?: 'individual' | 'organization' | 'both'; // who can open it (missing = individual)
+  // After the account is opened, flag it No-Debit in FlexCube (AC_STAT_NO_DR = 'Y') until the
+  // branch activates it — for individuals (missing = yes) and for organizations (missing = no)
+  noDebit?: boolean;
+  noDebitOrganizations?: boolean;
   active: boolean;
   classes: IAccountClass[];     // in display order
 }
@@ -48,6 +52,8 @@ const AccountProductSchema = new Schema<IAccountProduct>({
   description: { type: String, default: '' },
   isIFB: { type: Boolean, default: false },
   audience: { type: String, enum: ['individual', 'organization', 'both'], default: 'individual' },
+  noDebit: { type: Boolean },
+  noDebitOrganizations: { type: Boolean },
   active: { type: Boolean, default: true },
   classes: { type: [AccountClassSchema], default: [] },
 }, { _id: false });

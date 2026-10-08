@@ -451,7 +451,14 @@ export default function CorporateApplicationPage() {
         <div className="p-4 rounded-xl bg-green-50 border border-green-200 text-sm text-green-900 flex items-start gap-3">
           <Landmark className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
           <div><p className="font-medium">CIF {app.cifNumber} · Account {app.accountNumber}</p>
-            Approved by {app.approvedBy} {formatDate(app.approvedAt)}{app.flexcubeMessage ? ` — ${app.flexcubeMessage}` : ''}</div>
+            Approved by {app.approvedBy} {formatDate(app.approvedAt)}{app.flexcubeMessage ? ` — ${app.flexcubeMessage}` : ''}
+            {app.noDebit && (
+                <p className={`mt-1 text-xs font-medium ${app.noDebit.status === 'failed' ? 'text-red-700' : app.noDebit.status === 'set' ? 'text-amber-700' : 'text-gray-500'}`}>
+                  {app.noDebit.status === 'set' ? 'No-Debit set in FlexCube — lift it when the branch activates the account'
+                    : app.noDebit.status === 'not_required' ? 'No-Debit not set (account product setting)'
+                    : `No-Debit could not be set${app.noDebit.error ? ` (${app.noDebit.error})` : ''} — set it in FlexCube`}
+                </p>
+              )}</div>
         </div>
       )}
       {app.status !== 'approved' && app.flexcubeMessage && (

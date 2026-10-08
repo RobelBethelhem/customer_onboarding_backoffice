@@ -61,6 +61,7 @@ export interface Customer {
   customerNumber?: string;
   cifNumber?: string;
   accountNumber?: string;
+  noDebit?: { status: 'set' | 'not_required' | 'failed'; at?: string; error?: string }; // FlexCube No-Debit after opening
   rejectionReason?: string;
   approvedBy?: string;
   rejectedBy?: string;
