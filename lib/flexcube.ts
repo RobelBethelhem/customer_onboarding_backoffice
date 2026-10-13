@@ -41,6 +41,7 @@ export interface CreateCIFRequest {
   phone: string;
   email: string;
   motherMaidenName: string;
+  taxIdentity?: string;      // TIN the customer entered (digits)
   maritalStatus: string;     // 'S', 'M', 'D', 'W'
   nationality: string;       // e.g., 'ET'
   uin: string;               // Fayda UIN (used as SSN)
@@ -464,7 +465,7 @@ function buildCreateCustomerEnvelope(data: CreateCIFRequest, config: FlexCubeCon
                     <fcub:FULLNAME>${escapeXml(data.fullName.toUpperCase())}</fcub:FULLNAME>
                     <fcub:MEDIA>MAIL</fcub:MEDIA>
                     <fcub:LOC>CIF</fcub:LOC>
-                    <fcub:TAXIDENTITY/>
+                    <fcub:TAXIDENTITY>${escapeXml((data.taxIdentity || '').replace(/\D/g, ''))}</fcub:TAXIDENTITY>
                     <fcub:AUTHSTAT>A</fcub:AUTHSTAT>
                     <fcub:Custpersonal>
                         <fcub:FSTNAME>${escapeXml(data.firstName.toUpperCase())}</fcub:FSTNAME>
@@ -1110,6 +1111,7 @@ export async function createCustomerAndAccount(
     phone: string;
     email: string;
     motherMaidenName: string;
+    taxIdentity?: string;
     maritalStatus: string;
     uin: string;
     region: string;
@@ -1283,7 +1285,7 @@ function buildCreateCorporateCustomerEnvelope(data: CreateCorporateCIFRequest, c
                         <fcub:SAME_CORR_ADDR>${data.sameCorrespondenceAddress ? 'Y' : 'N'}</fcub:SAME_CORR_ADDR>${el('CADDR1', corr.city.toUpperCase(), i)}${el('CADDR3', corr.woreda.toUpperCase(), i)}${el('CADDR2', corr.subCity.toUpperCase(), i)}${el('CADDR4', corr.houseNumber.toUpperCase(), i)}
                         <fcub:CNTRY>ET</fcub:CNTRY>
                         <fcub:LANGUAGE>ENG</fcub:LANGUAGE>${el('TELEPHONE', telephone, i)}${el('FAX', data.fax, i)}${el('EMAILID', (data.email || '').toUpperCase(), i)}${el('MOBILENUMBER', mobile, i)}${el('NATIONID', data.registrationNumber, i)}${directors}
-                    </fcub:Custcorp>${udf('MAINT_FEE_WAIVED', 'Y')}${udf('CUSTOMER_SEGMENTATION', 'RETAIL CUSTOMER')}${udf('PROMOTION_TYPE', fcPromotion)}${udf('WEALTH_SOURCE', data.wealthSource || 'O')}${udf('OCCUPATION', 'O')}${udf('INDUSTRY', fcIndustry)}${udf('ANNUAL_INCOME', (Number(data.annualIncome) || 0).toFixed(2))}${udf('CURRENCY_REDEMPTION_PURPOSE', 'Y')}${udf('IS_THE_CUSTOMER_IN_SANCTION_LIST', 'N')}${udf('JOINT_ACC_PHNUMBER', mobile.replace(/^\+251/, ''))}${udf('CUSTOMER_RISK_RATING', 'HIGH')}${udf('CB_RM_GROUP', 'NA')}${udf('LEAD_RM', 'NA')}${udf('AGENTS_NATIONAL_ID_NUMBER', data.agentNationalId)}${udf('VAT_NO', data.vatNumber || '')}${udf('PLTCS_EX_PERSON', data.pep ? 'YES' : 'NO')}${udf('OTHER_WEALTH_SOURCE', data.otherWealthSource || '')}${udf('OTHER_OCCUPATION', data.categoryName.toUpperCase())}${udf('OTHER_INDUSTRY', data.otherIndustry || '')}
+                    </fcub:Custcorp>${udf('MAINT_FEE_WAIVED', 'Y')}${udf('CUSTOMER_SEGMENTATION', 'RETAIL CUSTOMER')}${udf('PROMOTION_TYPE', fcPromotion)}${udf('WEALTH_SOURCE', data.wealthSource || 'O')}${udf('OCCUPATION', 'O')}${udf('INDUSTRY', fcIndustry)}${udf('ANNUAL_INCOME', (Number(data.annualIncome) || 0).toFixed(2))}${udf('CURRENCY_REDEMPTION_PURPOSE', 'N')}${udf('IS_THE_CUSTOMER_IN_SANCTION_LIST', 'N')}${udf('JOINT_ACC_PHNUMBER', mobile.replace(/^\+251/, ''))}${udf('CUSTOMER_RISK_RATING', 'HIGH')}${udf('CB_RM_GROUP', 'NA')}${udf('LEAD_RM', 'NA')}${udf('AGENTS_NATIONAL_ID_NUMBER', data.agentNationalId)}${udf('VAT_NO', data.vatNumber || '')}${udf('PLTCS_EX_PERSON', data.pep ? 'YES' : 'NO')}${udf('OTHER_WEALTH_SOURCE', data.otherWealthSource || '')}${udf('OTHER_OCCUPATION', data.categoryName.toUpperCase())}${udf('OTHER_INDUSTRY', data.otherIndustry || '')}
                 </fcub:Customer-Full>
             </fcub:FCUBS_BODY>
         </fcub:CREATECUSTOMER_FSFS_REQ>

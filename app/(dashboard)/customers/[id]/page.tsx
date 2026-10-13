@@ -371,7 +371,7 @@ export default function CustomerDetailPage() {
       ['Maintenance Fee Waived', customer.maintFeeWaived || 'Y'],
       ['SLA Enabled', customer.slaEnable || 'N'],
       ['Lead RM', customer.leadRm || 'NA'],
-      ['Currency Redemption Purpose', customer.currencyRedemptionPurpose || 'Y'],
+      ['Currency Redemption Purpose', customer.currencyRedemptionPurpose || 'N'],
       ['Sanction List Status', customer.sanctionListStatus || 'N'],
       ['Politically Exposed Person', customer.politicallyExposedPerson || 'NO'],
       ['Customer Type', customer.customerType || 'Individual'],
@@ -1234,7 +1234,7 @@ export default function CustomerDetailPage() {
               <InfoItem label="Maintenance Fee Waived" value={customer.maintFeeWaived === 'Y' ? 'Yes' : customer.maintFeeWaived === 'N' ? 'No' : (customer.maintFeeWaived || 'Yes')} />
               <InfoItem label="SLA Enabled" value={customer.slaEnable === 'Y' ? 'Yes' : customer.slaEnable === 'N' ? 'No' : (customer.slaEnable || 'No')} />
               <InfoItem label="Lead RM" value={customer.leadRm || 'NA'} />
-              <InfoItem label="Currency Redemption Purpose" value={customer.currencyRedemptionPurpose === 'Y' ? 'Yes' : customer.currencyRedemptionPurpose === 'N' ? 'No' : (customer.currencyRedemptionPurpose || 'Yes')} />
+              <InfoItem label="Currency Redemption Purpose" value={customer.currencyRedemptionPurpose === 'Y' ? 'Yes' : customer.currencyRedemptionPurpose === 'N' ? 'No' : (customer.currencyRedemptionPurpose || 'No')} />
               <InfoItem label="Sanction List Status" value={customer.sanctionListStatus === 'N' ? 'Not in Sanction List' : customer.sanctionListStatus === 'Y' ? 'In Sanction List' : (customer.sanctionListStatus || 'Not in Sanction List')} />
               <InfoItem label="Politically Exposed Person" value={customer.politicallyExposedPerson || 'NO'} />
               <InfoItem label="Customer Type" value={customer.customerType || 'Individual'} />

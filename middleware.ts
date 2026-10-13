@@ -26,6 +26,7 @@ function isPublicApiRoute(method: string, pathname: string): boolean {
   if (pathname === '/api/onboarding' && method === 'POST') return true;
   if (pathname === '/api/screening/check' && method === 'POST') return true;
   if (pathname.startsWith('/api/applications/status') && method === 'GET') return true;
+  if (pathname === '/api/applications/amend' && method === 'POST') return true; // checks the applicant's Fayda verification itself
   if (pathname === '/api/branches' && method === 'GET') return true; // branch list for the web app
   if (pathname === '/api/account-products' && method === 'GET') return true; // product catalog for the web app
   if (pathname === '/api/additional-services' && method === 'GET') return true; // services catalog for the web app

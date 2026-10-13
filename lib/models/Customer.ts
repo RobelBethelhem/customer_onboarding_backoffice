@@ -134,7 +134,7 @@ export interface ICustomer extends Document {
   maintFeeWaived?: string;           // Maintenance fee waived (default: 'Y')
   slaEnable?: string;                // SLA enabled (default: 'N')
   leadRm?: string;                   // Lead RM (default: 'NA')
-  currencyRedemptionPurpose?: string; // Currency redemption purpose (default: 'Y')
+  currencyRedemptionPurpose?: string; // Currency redemption purpose (default: 'N')
   sanctionListStatus?: string;       // Is in sanction list (default: 'N')
   taxIdentity?: string;              // Tax Identity Number (TIN)
   politicallyExposedPerson?: string; // PEP status (default: 'NO')
@@ -309,7 +309,7 @@ const CustomerSchema = new Schema<ICustomer>({
   maintFeeWaived: { type: String, default: 'Y' },
   slaEnable: { type: String, default: 'N' },
   leadRm: { type: String, default: 'NA' },
-  currencyRedemptionPurpose: { type: String, default: 'Y' },
+  currencyRedemptionPurpose: { type: String, default: 'N' },
   sanctionListStatus: { type: String, default: 'N' },
   taxIdentity: { type: String, default: '' },
   politicallyExposedPerson: { type: String, default: 'NO' },

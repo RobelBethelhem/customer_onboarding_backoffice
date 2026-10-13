@@ -76,6 +76,7 @@ async function callFlexCubeService(customerData: any, settings: any): Promise<{
       phone: customerData.phone || '',
       email: customerData.email || '',
       motherMaidenName: customerData.motherMaidenName || '',
+      taxIdentity: customerData.taxIdentity || customerData.tin || '',
       maritalStatus: customerData.maritalStatus || 'S',
       uin: customerData.uin || '',
       region: customerData.region || customerData.address1 || '',
@@ -434,7 +435,7 @@ export async function POST(request: Request) {
       maintFeeWaived: body.maintFeeWaived || 'Y',
       slaEnable: body.slaEnable || 'N',
       leadRm: body.leadRm || 'NA',
-      currencyRedemptionPurpose: body.currencyRedemptionPurpose || 'Y',
+      currencyRedemptionPurpose: body.currencyRedemptionPurpose || 'N', // FlexCube gets 'N' (UDF)
       sanctionListStatus: body.sanctionListStatus || 'N',
       taxIdentity: body.taxIdentity || body.tin || '',
       politicallyExposedPerson: body.politicallyExposedPerson || 'NO',

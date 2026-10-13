@@ -216,6 +216,7 @@ export async function PATCH(
               phone: customer.phone || '',
               email: customer.email || '',
               motherMaidenName: customer.motherMaidenName || '',
+              taxIdentity: customer.taxIdentity || '',
               maritalStatus: customer.maritalStatus || 'S',
               uin: customer.uin || '',
               region: customer.region || '',
