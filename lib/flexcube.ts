@@ -59,6 +59,8 @@ export interface CreateCIFRequest {
   wealthSource: string;
   otherWealthSource?: string;
   annualIncome: number;
+  politicallyExposedPerson?: string; // 'YES' → UDF PLTCS_EX_PERSON = YES
+  sanctionListStatus?: string;       // 'Y'   → UDF IS_THE_CUSTOMER_IN_SANCTION_LIST = Y
   // Account opening details
   branchCode: string;
   accountTypeId?: string;
@@ -400,9 +402,10 @@ function buildCreateCustomerEnvelope(data: CreateCIFRequest, config: FlexCubeCon
   // Format DOB to YYYY-MM-DD
   const dob = formatDOB(data.dateOfBirth);
 
-  // Annual income as decimal
-  data.annualIncome = data.annualIncome / 12;
-  const annualIncome = (data.annualIncome || 0).toFixed(2);
+  // Annual income (per year, as stored: the monthly income the customer gave × 12) as decimal
+  const annualIncome = (Number(data.annualIncome) || 0).toFixed(2);
+  const pep = String(data.politicallyExposedPerson || '').toUpperCase() === 'YES' ? 'YES' : 'NO';
+  const inSanctionList = String(data.sanctionListStatus || '').toUpperCase() === 'Y' ? 'Y' : 'N';
 
   // Passport dates — matching working Fayda XML: today + 101 years
   // FlexCube server is in 2025, so use 2025-based dates
@@ -522,7 +525,7 @@ function buildCreateCustomerEnvelope(data: CreateCIFRequest, config: FlexCubeCon
                     </fcub:UDFDETAILS>
                     <fcub:UDFDETAILS>
                         <fcub:FLDNAM>IS_THE_CUSTOMER_IN_SANCTION_LIST</fcub:FLDNAM>
-                        <fcub:FLDVAL>N</fcub:FLDVAL>
+                        <fcub:FLDVAL>${inSanctionList}</fcub:FLDVAL>
                     </fcub:UDFDETAILS>
                     <fcub:UDFDETAILS>
                         <fcub:FLDNAM>CUSTOMER_RISK_RATING</fcub:FLDNAM>
@@ -546,7 +549,7 @@ function buildCreateCustomerEnvelope(data: CreateCIFRequest, config: FlexCubeCon
                     </fcub:UDFDETAILS>
                     <fcub:UDFDETAILS>
                         <fcub:FLDNAM>PLTCS_EX_PERSON</fcub:FLDNAM>
-                        <fcub:FLDVAL>NO</fcub:FLDVAL>
+                        <fcub:FLDVAL>${pep}</fcub:FLDVAL>
                     </fcub:UDFDETAILS>
                     <fcub:UDFDETAILS>
                         <fcub:FLDNAM>OTHER_WEALTH_SOURCE</fcub:FLDNAM>
@@ -1126,6 +1129,8 @@ export async function createCustomerAndAccount(
     wealthSource: string;
     otherWealthSource?: string;
     annualIncome: number;
+    politicallyExposedPerson?: string;
+    sanctionListStatus?: string;
     branchCode: string;
     tierId: string;
     accountTypeId: string;

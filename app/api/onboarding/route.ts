@@ -88,7 +88,10 @@ async function callFlexCubeService(customerData: any, settings: any): Promise<{
       otherIndustry: customerData.otherIndustry || '',
       wealthSource: customerData.wealthSource || 'SAL',
       otherWealthSource: customerData.otherWealthSource || '',
-      annualIncome: customerData.annualIncome || customerData.monthlyIncome || 0,
+      // per year: a monthly figure alone is multiplied by 12
+      annualIncome: Number(customerData.annualIncome) || (Number(customerData.monthlyIncome) || 0) * 12,
+      politicallyExposedPerson: customerData.politicallyExposedPerson || 'NO',
+      sanctionListStatus: customerData.sanctionListStatus || 'N',
       branchCode: customerData.branchCode || config.defaultBranch,
       tierId: setup.tierId,
       accountTypeId: customerData.accountTypeId || 'SPRI',
@@ -245,6 +248,27 @@ export async function POST(request: Request) {
             success: false,
             error: `We could not find CIF ${existingCif} in our records. Please check the account number or CIF you entered and try again.`,
           }, { status: 400 });
+        }
+      }
+      // An account of the CIF frozen or on No-Debit: no new account online (the web app checks this
+      // first; checked again here). The Fayda backend runs the query; if it cannot, KYC still reviews.
+      if (settings.flexcubeEnabled !== false) {
+        const FAYDA_BACKEND_URL = process.env.FAYDA_BACKEND_URL || 'http://localhost:5000';
+        try {
+          const res = await fetch(`${FAYDA_BACKEND_URL}/api/flexcube/customer-branch`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cif: existingCif }),
+          });
+          const r = await res.json().catch(() => ({}));
+          if (res.status === 409 && r.restricted) {
+            console.log(`[Onboarding] Existing CIF ${existingCif} refused: ${r.accountStatus || 'restricted account'}`);
+            return NextResponse.json({
+              success: false,
+              error: r.message || 'One of your accounts is frozen or on No-Debit. Please visit a Zemen Bank branch to continue.',
+            }, { status: 400 });
+          }
+          if (existingCifCheck) existingCifCheck.accountStatusChecked = res.ok;
+        } catch (e: any) {
+          console.warn(`[Onboarding] Account status of CIF ${existingCif} could not be checked: ${e?.message || e}`);
         }
       }
       console.log(`[Onboarding] Existing customer — CIF ${existingCif}, FlexCube check:`, existingCifCheck);
@@ -424,7 +448,7 @@ export async function POST(request: Request) {
       otherIndustry: body.otherIndustry,
       wealthSource: body.wealthSource,
       otherWealthSource: body.otherWealthSource,
-      annualIncome: body.annualIncome || body.monthlyIncome || 0,
+      annualIncome: Number(body.annualIncome) || (Number(body.monthlyIncome) || 0) * 12, // per year
       initialDeposit: body.initialDeposit,
       motherMaidenName: body.motherMaidenName,
       maritalStatus: body.maritalStatus,

@@ -231,6 +231,8 @@ export async function PATCH(
               wealthSource: customer.wealthSource || 'SAL',
               otherWealthSource: customer.otherWealthSource || '',
               annualIncome: customer.annualIncome || 0,
+              politicallyExposedPerson: customer.politicallyExposedPerson || 'NO',
+              sanctionListStatus: customer.sanctionListStatus || 'N',
               branchCode: customer.branchCode || flexcubeConfig.defaultBranch,
               tierId: setup.tierId,
               accountTypeId: customer.accountTypeId || 'SPRI',
