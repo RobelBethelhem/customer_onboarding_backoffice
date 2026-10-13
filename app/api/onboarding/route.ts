@@ -13,7 +13,7 @@ import { normalizeServices, servicesInProgressSmsLine, serviceNamesFor } from '@
 import { getAdditionalServices } from '@/lib/additionalServices';
 import { audit, SYSTEM_ACTOR } from '@/lib/audit';
 import { isIfbProduct } from '@/lib/ifbBranchRules';
-import { ifbBranchFor } from '@/lib/ifbBranches';
+import { ifbBranchFor, getBranches } from '@/lib/ifbBranches';
 import { findAccountClass } from '@/lib/accountProducts';
 
 // Run referral index migration once on first request
@@ -148,14 +148,6 @@ export async function POST(request: Request) {
       body.tierInterestRate = catalog.accountClass.interestRate ?? 0;
     }
 
-    // Interest-free (IFB) accounts are opened in the IFB counterpart of the branch the applicant
-    // chose (e.g. Head Quarter 164 → 664, per Settings → IFB Branches); keep the chosen one too.
-    const conventionalBranchCode = String(body.branchCode || '');
-    if (isIfbProduct(body) && conventionalBranchCode) {
-      const ifbCode = await ifbBranchFor(conventionalBranchCode);
-      if (ifbCode) body.branchCode = ifbCode;
-      else console.warn(`[Onboarding] No IFB branch code configured for branch ${conventionalBranchCode} — kept as is`);
-    }
 
     // Existing customer: the applicant already has a CIF — given directly, or taken from their
     // 16-digit account number (BRN(3) + product(3) + CIF(7) + SEQ(3)). On approval only a new
@@ -218,6 +210,20 @@ export async function POST(request: Request) {
       } else {
         const lookup = await queryCustomerByCustNo(existingCif, getFlexCubeConfig(settings));
         if (lookup.success) {
+          // The new account opens at the customer's home branch in FlexCube, whatever was sent
+          // (the web app takes it from the CIF and skips the branch choice). An IFB home branch
+          // (e.g. 664) is kept as its conventional branch here; IFB products map it back below.
+          const home = String(lookup.branch || '').trim();
+          if (home) {
+            const directory = await getBranches();
+            const entry = directory.find(b => b.conventionalCode === home) || directory.find(b => b.ifbCode === home);
+            const conventional = entry ? entry.conventionalCode : home;
+            if (String(body.branchCode || '') !== conventional) {
+              console.log(`[Onboarding] Existing customer CIF ${existingCif}: branch ${body.branchCode || '-'} → home branch ${conventional}`);
+            }
+            body.branchCode = conventional;
+            body.branch = entry?.branchName || body.branch || `Branch ${home}`;
+          }
           const last9 = (p?: string) => String(p || '').replace(/\D/g, '').slice(-9);
           const cifPhone = last9(lookup.phone);
           existingCifCheck = {
@@ -241,6 +247,16 @@ export async function POST(request: Request) {
         }
       }
       console.log(`[Onboarding] Existing customer — CIF ${existingCif}, FlexCube check:`, existingCifCheck);
+    }
+
+    // Interest-free (IFB) accounts are opened in the IFB counterpart of the branch (chosen, or the
+    // existing customer's home branch), e.g. Head Quarter 164 → 664 per Settings → Branches; keep
+    // the conventional one too.
+    const conventionalBranchCode = String(body.branchCode || '');
+    if (isIfbProduct(body) && conventionalBranchCode) {
+      const ifbCode = await ifbBranchFor(conventionalBranchCode);
+      if (ifbCode) body.branchCode = ifbCode;
+      else console.warn(`[Onboarding] No IFB branch code configured for branch ${conventionalBranchCode} — kept as is`);
     }
 
     // UAT: If the applicant is resubmitting a RETURNED/REJECTED application (same Fayda UIN),
