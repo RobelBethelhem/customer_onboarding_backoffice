@@ -4,6 +4,7 @@ import AccountProductSettings, { IAccountClass, IAccountProduct } from '@/lib/mo
 import { requireRole } from '@/lib/apiAuth';
 import { audit } from '@/lib/audit';
 import { defaultAccountProducts, getAccountProducts } from '@/lib/accountProducts';
+import { normalizeCurrencies } from '@/lib/currencies';
 
 // Always run on request (a pre-rendered route would freeze the data and reject PUT with 405)
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,8 @@ const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').re
 
 const describeClass = (c: IAccountClass) =>
   `${c.name} · ${c.interestRate === null ? 'no interest' : `${c.interestRate}%`} · min ${c.minBalance ?? '—'}` +
-  `${c.maxBalance !== null ? ` to ${c.maxBalance}` : ''} · product no. ${c.productNumber || '—'} · ${c.active ? 'active' : 'inactive'}`;
+  `${c.maxBalance !== null ? ` to ${c.maxBalance}` : ''} · product no. ${c.productNumber || '—'}` +
+  ` · ${c.currencies?.length ? `FCY ${c.currencies.join('/')}` : 'ETB'} · ${c.active ? 'active' : 'inactive'}`;
 
 /** GET /api/account-products/manage — full catalog incl. inactive items (KYC officers, admin) */
 export async function GET(request: NextRequest) {
@@ -79,6 +81,7 @@ export async function PUT(request: NextRequest) {
         if (productNumber && !/^\d{1,5}$/.test(productNumber)) return bad(`${className}: product number must be digits`);
         classes.push({
           code, name: className, interestRate, minBalance, maxBalance, productNumber,
+          currencies: normalizeCurrencies(c?.currencies), // FCY class: offered currencies; [] = ETB
           remarks: String(c?.remarks ?? '').trim().slice(0, 300),
           active: c?.active !== false,
         });

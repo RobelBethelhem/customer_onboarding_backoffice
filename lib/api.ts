@@ -17,6 +17,7 @@ export interface Customer {
   tierInterestRate?: number;
   accountClassCode?: string;
   accountClassName?: string;
+  currency?: string;          // ETB, or the currency chosen for an FCY class (missing = ETB)
   isIFB?: boolean;
   status: 'pending' | 'verified' | 'approved' | 'rejected' | 'auto_approved' | 'escalated' | 'returned' | 'in_review';
   channel?: 'mobile_app' | 'web' | 'whatsapp' | 'telegram' | 'superapp' | 'other';

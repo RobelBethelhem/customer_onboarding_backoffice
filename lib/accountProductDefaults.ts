@@ -7,7 +7,7 @@ import type { IAccountProduct } from '@/lib/models/AccountProducts';
 const cls = (
   code: string, name: string, interestRate: number | null, minBalance: number | null,
   maxBalance: number | null, remarks: string, productNumber: string
-) => ({ code, name, interestRate, minBalance, maxBalance, remarks, productNumber, active: true });
+) => ({ code, name, interestRate, minBalance, maxBalance, remarks, productNumber, currencies: [] as string[], active: true });
 
 export const DEFAULT_ACCOUNT_PRODUCTS: IAccountProduct[] = [
   {
@@ -27,7 +27,7 @@ export const DEFAULT_ACCOUNT_PRODUCTS: IAccountProduct[] = [
       cls('DZSB', 'Z-Club Special Basic Saving — Digital', 7.75, 500000, 2000000, 'Interest rate 7.75%, balance 500,000.00 to 2,000,000.00', '37'),
       cls('DZSG', 'Z-Club Special Gold Saving — Digital', 7, 2000000, 5000000, 'Interest rate 7%, balance 2,000,000.00 to 5,000,000.00', '36'),
       cls('DZSP', 'Z-Club Special Platinum Saving — Digital', 7, 5000000, null, 'Interest rate 7%, balance greater than 5,000,000.00', '28'),
-      cls('DFCY', 'Foreign Currency Saving Account', null, null, null, 'Same as FCY Saving Account', '29'),
+      { ...cls('DFCY', 'Foreign Currency Saving Account', null, null, null, 'Same as FCY Saving Account', '29'), currencies: ['USD', 'GBP', 'EUR'] },
     ],
   },
   {

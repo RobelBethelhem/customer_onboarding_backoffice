@@ -7,6 +7,7 @@ import {
   Send, Clock, ExternalLink, PenLine, History, Landmark, RotateCcw, UserCheck,
 } from 'lucide-react';
 import { formatDate } from '@/lib/api';
+import { currencyName } from '@/lib/currencies';
 import { ensureDataUri } from '@/lib/imageUtils';
 import { useAuth } from '@/components/AuthProvider';
 import FaceVerificationPanel from '@/components/FaceVerificationPanel';
@@ -495,6 +496,7 @@ export default function CorporateApplicationPage() {
           <div className="space-y-3">
             <Field label="Product" value={`${app.accountTypeName}${app.isIFB ? ' (interest-free)' : ''}`} />
             <Field label="Account class" value={`${app.accountClassName} (${app.accountClassCode})`} />
+            <Field label="Currency" value={`${app.currency || 'ETB'} — ${currencyName(app.currency || 'ETB')}`} />
             <Field label="Branch" value={`${app.branch} — ${app.branchCode}${app.conventionalBranchCode ? ` (chosen ${app.conventionalBranchCode})` : ''}`} />
             <Field label="Who signs" value={app.signingRuleText} />
             <Field label="People" value={`${app.people.length} (${app.people.filter(p => p.roles.includes('signatory')).length} signatories, ${app.people.filter(p => p.roles.includes('director')).length} directors)`} />

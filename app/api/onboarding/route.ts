@@ -15,6 +15,7 @@ import { audit, SYSTEM_ACTOR } from '@/lib/audit';
 import { isIfbProduct } from '@/lib/ifbBranchRules';
 import { ifbBranchFor, getBranches } from '@/lib/ifbBranches';
 import { findAccountClass } from '@/lib/accountProducts';
+import { accountCurrency, FCY_CURRENCIES } from '@/lib/currencies';
 
 // Run referral index migration once on first request
 let referralIndexesMigrated = false;
@@ -97,6 +98,7 @@ async function callFlexCubeService(customerData: any, settings: any): Promise<{
       accountTypeId: customerData.accountTypeId || 'SPRI',
       accountClass: setup.accountClass,
       islamic: setup.islamic,
+      currency: customerData.currency || 'ETB',
       promotionType: customerData.promotionType || 'Walk in customer',
       customerSegmentation: customerData.customerSegmentation || 'RETAIL CUSTOMER',
     }, config);
@@ -151,6 +153,16 @@ export async function POST(request: Request) {
       body.tierId = catalog.accountClass.productNumber || body.tierId;
       body.tierInterestRate = catalog.accountClass.interestRate ?? 0;
     }
+    // Account currency: an FCY class needs one of the currencies KYC offers for it; others are ETB
+    const currency = accountCurrency(body.currency, catalog?.accountClass.currencies);
+    if (!currency) {
+      const offered = FCY_CURRENCIES.filter(c => catalog!.accountClass.currencies!.includes(c.code)).map(c => c.code).join(', ');
+      return NextResponse.json({
+        success: false,
+        error: `Please choose the currency of your ${catalog!.accountClass.name} (${offered}) on the Account Type step.`,
+      }, { status: 400 });
+    }
+    body.currency = currency;
 
 
     // Existing customer: the applicant already has a CIF — given directly, or taken from their
@@ -430,6 +442,7 @@ export async function POST(request: Request) {
       tierInterestRate: body.tierInterestRate,
       accountClassCode: body.accountClassCode || '',
       accountClassName: body.accountClassName || '',
+      currency: body.currency,
       isIFB: body.isIFB === true,
       uin: body.uin,
       fcn: body.fcn,

@@ -71,6 +71,7 @@ export interface ICustomer extends Document {
   tierInterestRate?: number;
   accountClassCode?: string;  // catalog code, e.g. 'DBSV' (Account Products page)
   accountClassName?: string;
+  currency?: string;          // account currency: ETB, or the one chosen for an FCY class (USD, GBP, EUR)
   isIFB?: boolean;            // interest-free product
   status: 'pending' | 'verified' | 'approved' | 'rejected' | 'auto_approved' | 'escalated' | 'returned' | 'in_review';
   channel: CustomerChannel;
@@ -230,6 +231,7 @@ const CustomerSchema = new Schema<ICustomer>({
   tierInterestRate: { type: Number, default: 0 },
   accountClassCode: { type: String, default: '' },
   accountClassName: { type: String, default: '' },
+  currency: { type: String, default: 'ETB' },
   isIFB: { type: Boolean, default: false },
   status: {
     type: String,

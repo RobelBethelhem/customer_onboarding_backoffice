@@ -33,7 +33,8 @@ export async function GET(request: Request) {
         name: p.name,
         description: p.description,
         isIFB: p.isIFB,
-        classes: p.classes.filter(c => c.active).map(({ active, ...c }) => c),
+        // currencies: an FCY class's currencies to choose from ([] = an ETB account)
+        classes: p.classes.filter(c => c.active).map(({ active, ...c }) => ({ ...c, currencies: c.currencies || [] })),
       }))
       .filter(p => p.classes.length > 0);
     return NextResponse.json({ success: true, data: products }, { headers: corsHeaders });

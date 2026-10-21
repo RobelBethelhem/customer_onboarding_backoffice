@@ -322,6 +322,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           industry: o.industry, otherIndustry: o.otherIndustry, annualIncome: o.annualIncome,
           pep, agentNationalId: applicant?.verification?.uin || applicant?.verification?.fan || '',
           tierId: setup.tierId, accountClass: setup.accountClass, islamic: setup.islamic,
+          currency: app.currency || 'ETB',
           existingCif: app.cifNumber || undefined,
         }, config);
 

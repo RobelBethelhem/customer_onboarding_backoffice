@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     }
 
     const c = await Customer.findOne({ customerId: applicationId })
-      .select('customerId status uin fcn returnReason rejectionReason branchCode conventionalBranchCode accountTypeId accountClassCode tierName '
+      .select('customerId status uin fcn returnReason rejectionReason branchCode conventionalBranchCode accountTypeId accountClassCode tierName currency '
         + 'email taxIdentity annualIncome occupation otherOccupation industry otherIndustry wealthSource otherWealthSource '
         + 'motherMaidenName maritalStatus promotionType isExistingCustomer existingCif existingAccountNumber requestedServices requestedServiceDetails')
       .lean() as any;
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
           branchCode: c.conventionalBranchCode || c.branchCode || '',
           accountTypeId: c.accountTypeId || '',
           accountClassCode: c.accountClassCode || c.tierName || '',
+          currency: c.currency || 'ETB',
           email: c.email || '',
           taxIdentity: c.taxIdentity || '',
           monthlyIncome: c.annualIncome ? Math.round(Number(c.annualIncome) / 12) : 0, // stored per year

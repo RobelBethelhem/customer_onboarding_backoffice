@@ -10,6 +10,7 @@ import {
   Shield, Megaphone, Lock, UserCheck, Smartphone
 } from 'lucide-react';
 import { serviceNamesFor } from '@/lib/services';
+import { currencyName } from '@/lib/currencies';
 import {
   fetchCustomer, approveCustomer, rejectCustomer, returnCustomer, escalateCustomer, reviewCustomer,
   acquireLock, releaseLock,
@@ -346,6 +347,7 @@ export default function CustomerDetailPage() {
       ['FCN', customer.fcn || '-'],
       ['Account Type', customer.accountTypeName || customer.accountType],
       ['Account Class', customer.accountClassCode ? `${customer.accountClassName || customer.tierName} (${customer.accountClassCode})` : (customer.tierName || '-')],
+      ['Currency', `${customer.currency || 'ETB'} — ${currencyName(customer.currency || 'ETB')}`],
       ['Status', getStatusLabel(customer.status)],
       ['CIF Number', customer.cifNumber || '-'],
       ['Account Number', customer.accountNumber || '-'],
@@ -1088,6 +1090,7 @@ export default function CustomerDetailPage() {
             <div className="space-y-4">
               <InfoItem label="Account Type" value={customer.accountTypeName || customer.accountType} />
               <InfoItem label="Account Type ID" value={customer.accountTypeId} />
+              <InfoItem label="Currency" value={`${customer.currency || 'ETB'} — ${currencyName(customer.currency || 'ETB')}`} />
               {customer.accountClassCode ? (
                 <>
                   <div className="pt-2 border-t">

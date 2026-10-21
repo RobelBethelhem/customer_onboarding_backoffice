@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   Plus, Trash2, ChevronUp, ChevronDown, Save, Loader2, AlertTriangle, CheckCircle2, RotateCcw,
 } from 'lucide-react';
+import { FCY_CURRENCIES } from '@/lib/currencies';
 
 interface AccountClass {
   code: string;
@@ -13,6 +14,7 @@ interface AccountClass {
   maxBalance: number | string | null;
   remarks: string;
   productNumber: string;
+  currencies?: string[]; // FCY class: the currencies offered (missing / empty = ETB)
   active: boolean;
 }
 
@@ -29,8 +31,10 @@ interface AccountProduct {
 }
 
 const emptyClass = (): AccountClass => ({
-  code: '', name: '', interestRate: '', minBalance: '', maxBalance: '', remarks: '', productNumber: '', active: true,
+  code: '', name: '', interestRate: '', minBalance: '', maxBalance: '', remarks: '', productNumber: '', currencies: [], active: true,
 });
+
+const ALL_FCY = FCY_CURRENCIES.map(c => c.code);
 
 function move<T>(list: T[], index: number, delta: number): T[] {
   const to = index + delta;
@@ -159,7 +163,8 @@ export default function AccountProductsManager() {
             The account types and classes customers can choose in the web app. Turn items off to hide them, use the
             arrows to change the order. <b>No-Debit</b>: when on, a new account of the product is flagged No-Debit in
             FlexCube after it opens (nothing can be debited until the branch activates it) — on by default for
-            individuals, off for organizations.
+            individuals, off for organizations. <b>FCY</b>: a foreign currency class — the customer chooses one of the
+            ticked currencies and FlexCube opens the account in it; otherwise the account is in birr (ETB).
             {meta.updatedAt && (
               <> Last changed {new Date(meta.updatedAt).toLocaleString()}{meta.updatedBy ? ` by ${meta.updatedBy}` : ''}.</>
             )}
@@ -249,7 +254,7 @@ export default function AccountProductsManager() {
 
           {/* Classes */}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[980px]">
+            <table className="w-full text-sm min-w-[1120px]">
               <thead>
                 <tr className="text-left text-xs uppercase text-gray-500 border-b">
                   <th className="px-3 py-2 w-14">Order</th>
@@ -260,6 +265,7 @@ export default function AccountProductsManager() {
                   <th className="px-2 py-2 w-32">Max balance</th>
                   <th className="px-2 py-2">Remarks</th>
                   <th className="px-2 py-2 w-24" title="Number sent to FlexCube in the account number template; its FlexCube account class is set in Settings → FlexCube (Account Class by Product Number)">Product no.</th>
+                  <th className="px-2 py-2 w-36" title="Foreign currency (FCY) account: the customer chooses one of the ticked currencies and the account opens in it. Off = ETB.">Currency</th>
                   <th className="px-2 py-2 w-16">Active</th>
                   <th className="px-2 py-2 w-10" />
                 </tr>
@@ -300,6 +306,27 @@ export default function AccountProductsManager() {
                     <td className="px-2 py-1.5">
                       <input className={`${input} font-mono`} inputMode="numeric" value={c.productNumber} maxLength={5}
                         onChange={e => setClass(pi, ci, { productNumber: e.target.value.replace(/\D/g, '') })} />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {/* FCY: off = ETB; on = the customer picks one of the ticked currencies (untick all = ETB) */}
+                      <span className="flex items-center gap-2 text-xs text-gray-700">
+                        <Toggle on={!!c.currencies?.length} label="Foreign currency (FCY) account"
+                          onChange={() => setClass(pi, ci, { currencies: c.currencies?.length ? [] : [...ALL_FCY] })} />
+                        {c.currencies?.length ? 'FCY' : 'ETB'}
+                      </span>
+                      {!!c.currencies?.length && (
+                        <span className="flex gap-2 mt-1">
+                          {FCY_CURRENCIES.map(x => (
+                            <label key={x.code} title={x.name} className="flex items-center gap-1 text-xs text-gray-700 cursor-pointer">
+                              <input type="checkbox" className="w-3.5 h-3.5 accent-green-600" checked={c.currencies!.includes(x.code)}
+                                onChange={() => setClass(pi, ci, {
+                                  currencies: ALL_FCY.filter(code => code === x.code ? !c.currencies!.includes(code) : c.currencies!.includes(code)),
+                                })} />
+                              {x.code}
+                            </label>
+                          ))}
+                        </span>
+                      )}
                     </td>
                     <td className="px-2 py-1.5">
                       <Toggle on={c.active} onChange={() => setClass(pi, ci, { active: !c.active })} label="Active" />

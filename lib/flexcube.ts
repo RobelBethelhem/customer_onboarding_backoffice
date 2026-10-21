@@ -1092,7 +1092,7 @@ export async function createAccount(
 export async function createAccountForCIF(
   // accountClass: FlexCube account class (see accountSetupFor); default = mapping by tierId (SPRI)
   // islamic: IFB account, opened through FCUBSIAService (CreateIACustAcc)
-  data: { cifNumber: string; customerName: string; branchCode: string; tierId: string; accountClass?: string; islamic?: boolean },
+  data: { cifNumber: string; customerName: string; branchCode: string; tierId: string; accountClass?: string; islamic?: boolean; currency?: string },
   config: FlexCubeConfig = defaultFlexCubeConfig
 ): Promise<CreateAccountResult> {
   // FYDA_USR doesn't have CreateCustAcc rights (GW-ROUT0008), so use IB_SER for account creation
@@ -1108,7 +1108,7 @@ export async function createAccountForCIF(
     branchCode: data.branchCode || config.defaultBranch,
     accountClass: data.accountClass || getAccountClass(data.tierId),
     tierId: data.tierId,
-    currency: 'ETB',
+    currency: data.currency || 'ETB', // FCY class: the currency the applicant chose
     islamic: data.islamic === true,
   }, accountConfig);
 }
@@ -1152,6 +1152,7 @@ export async function createCustomerAndAccount(
     accountTypeId: string;
     accountClass?: string;
     islamic?: boolean;
+    currency?: string;       // account currency (ETB unless an FCY class)
     promotionType?: string;
     customerSegmentation?: string;
     maker?: string;
@@ -1185,6 +1186,7 @@ export async function createCustomerAndAccount(
     tierId: customerData.tierId,
     accountClass: customerData.accountClass,
     islamic: customerData.islamic,
+    currency: customerData.currency,
   }, config);
 
   if (!accountResult.success || !accountResult.accountNumber) {
@@ -1344,7 +1346,7 @@ export async function createCorporateCIF(
  * the CIF so the organization never gets two.
  */
 export async function createCorporateCustomerAndAccount(
-  data: CreateCorporateCIFRequest & { tierId: string; accountClass: string; islamic: boolean; existingCif?: string },
+  data: CreateCorporateCIFRequest & { tierId: string; accountClass: string; islamic: boolean; currency?: string; existingCif?: string },
   config: FlexCubeConfig = defaultFlexCubeConfig
 ): Promise<{ success: boolean; cifNumber?: string; accountNumber?: string; message: string }> {
   let cifNumber = data.existingCif || '';
@@ -1360,6 +1362,7 @@ export async function createCorporateCustomerAndAccount(
     tierId: data.tierId,
     accountClass: data.accountClass,
     islamic: data.islamic,
+    currency: data.currency,
   }, config);
   if (!account.success || !account.accountNumber) {
     return { success: false, cifNumber, message: `CIF ${cifNumber} created but account creation failed: ${account.message}` };

@@ -129,6 +129,7 @@ export interface ICorporateApplication extends Document {
   accountTypeName: string;
   accountClassCode: string;
   accountClassName: string;
+  currency: string;             // account currency: ETB, or the one chosen for an FCY class
   tierId: string;
   isIFB: boolean;
   signingRule: SigningRule;
@@ -293,6 +294,7 @@ const CorporateApplicationSchema = new Schema<ICorporateApplication>({
   accountTypeName: { type: String, default: '' },
   accountClassCode: { type: String, default: '' },
   accountClassName: { type: String, default: '' },
+  currency: { type: String, default: 'ETB' },
   tierId: { type: String, default: '' },
   isIFB: { type: Boolean, default: false },
   signingRule: { type: String, enum: ['single', 'any_two', 'all', 'other'], default: 'single' },

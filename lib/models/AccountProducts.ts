@@ -9,6 +9,9 @@ export interface IAccountClass {
   maxBalance: number | null;    // ETB, for classes defined by a balance band
   remarks: string;
   productNumber: string;        // number the web app has always sent as tierId (used in the FlexCube account template)
+  // Foreign currency (FCY) class: the currencies the applicant can choose (USD, GBP, EUR — see
+  // lib/currencies.ts), sent to FlexCube as the account's CCY. Empty / missing = an ETB account.
+  currencies?: string[];
   active: boolean;
 }
 
@@ -43,6 +46,7 @@ const AccountClassSchema = new Schema<IAccountClass>({
   maxBalance: { type: Number, default: null },
   remarks: { type: String, default: '' },
   productNumber: { type: String, default: '' },
+  currencies: { type: [String], default: [] },
   active: { type: Boolean, default: true },
 }, { _id: false });
 

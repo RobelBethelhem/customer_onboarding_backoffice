@@ -64,6 +64,7 @@ export interface CorporateApplication {
   };
   branch: string; branchCode: string; conventionalBranchCode?: string;
   accountTypeId: string; accountTypeName: string; accountClassCode: string; accountClassName: string; tierId: string; isIFB: boolean;
+  currency?: string; // ETB, or the FCY currency chosen (older applications: missing = ETB)
   signingRule: string; signingRuleOther: string; signingRuleText: string;
   people: CorporatePerson[];
   documents: CorporateDocument[];

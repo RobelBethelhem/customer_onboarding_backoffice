@@ -205,6 +205,7 @@ export async function PATCH(
               tierId: setup.tierId,
               accountClass: setup.accountClass,
               islamic: setup.islamic,
+              currency: customer.currency || 'ETB',
             }, flexcubeConfig)
           : await createCustomerAndAccount({
               fullName: customer.fullName,
@@ -238,6 +239,7 @@ export async function PATCH(
               accountTypeId: customer.accountTypeId || 'SPRI',
               accountClass: setup.accountClass,
               islamic: setup.islamic,
+              currency: customer.currency || 'ETB',
               promotionType: customer.promotionType || 'Walk in customer',
               customerSegmentation: customer.customerSegmentation || 'RETAIL CUSTOMER',
               maker: customer.maker || 'WEB_USER',
@@ -249,6 +251,7 @@ export async function PATCH(
           accountNumber = result.accountNumber;
           flexcubeMessage = result.message;
           if (setup.islamic) approvalNote = ` — IFB account (CreateIACustAcc, class ${setup.accountClass})`;
+          if (customer.currency && customer.currency !== 'ETB') approvalNote += ` — ${customer.currency} account`;
           console.log(`[FlexCube] SUCCESS — CIF: ${cifNumber}, Account: ${accountNumber}`);
         } else {
           // FlexCube failed — return error, do NOT approve without real CIF

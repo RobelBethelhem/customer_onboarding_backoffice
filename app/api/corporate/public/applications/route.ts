@@ -6,6 +6,7 @@ import CorporateApplication, {
 import CorporateVerification, { ICorporateVerification } from '@/lib/models/CorporateVerification';
 import { getCorporateCatalog, documentsFor, accountClassesFor } from '@/lib/corporateCatalog';
 import { findAccountClass } from '@/lib/accountProducts';
+import { accountCurrency, FCY_CURRENCIES } from '@/lib/currencies';
 import { getBranches, ifbBranchFor } from '@/lib/ifbBranches';
 import { verifyIdentity } from '@/lib/faydaTokens';
 import { sendSMS } from '@/lib/sms';
@@ -44,7 +45,7 @@ interface FileInput { fileId?: string; fileKey?: string }
  * Body: {
  *   applicant: { ekycToken, faceVerificationToken?, faydaPhoto, selfie, livenessFrames?, faceVideoId?, phone, roles, signature? },
  *   organization: { name, categoryId, subtypeId, registrationNumber, …, registeredAddress, correspondenceAddress },
- *   branchCode, accountTypeId, accountClassCode, signingRule, signingRuleOther,
+ *   branchCode, accountTypeId, accountClassCode, currency (FCY class: USD/GBP/EUR), signingRule, signingRuleOther,
  *   groupId,                                               // the wizard's id for this application
  *   people: [{ verificationId, verificationKey, roles, signature? }   // verified with the applicant, or link sent
  *          | { fullName, phone, roles, signature? }],               // (older form) link sent on submission
@@ -108,6 +109,12 @@ export async function POST(request: Request) {
     const allowedClasses = accountClassesFor(category, subtype?.id || '');
     if (allowedClasses && !allowedClasses.includes(accountClass.code)) {
       return bad(`${product.name} — ${accountClass.name} is not offered for ${subtype?.name || category.name}. Please choose another account type.`);
+    }
+    // Account currency: an FCY class needs one of the currencies KYC offers for it; others are ETB
+    const currency = accountCurrency(body.currency, accountClass.currencies);
+    if (!currency) {
+      const offeredCurrencies = FCY_CURRENCIES.filter(c => accountClass.currencies!.includes(c.code)).map(c => c.code).join(', ');
+      return bad(`Choose the currency of the ${accountClass.name} (${offeredCurrencies})`);
     }
 
     // ── People ──────────────────────────────────────────────────────────────────────────────
@@ -275,7 +282,7 @@ export async function POST(request: Request) {
       },
       branch: branch.branchName, branchCode, conventionalBranchCode,
       accountTypeId: product.id, accountTypeName: product.name,
-      accountClassCode: accountClass.code, accountClassName: accountClass.name,
+      accountClassCode: accountClass.code, accountClassName: accountClass.name, currency,
       tierId: accountClass.productNumber || '', isIFB: product.isIFB,
       signingRule, signingRuleOther,
       people, documents,
