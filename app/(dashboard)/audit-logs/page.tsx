@@ -45,7 +45,7 @@ const ACTION_LABELS: Record<string, string> = {
   RESTORE: 'Restored', IMPORT: 'Imported', EXPORT: 'Exported', STATUS_CHANGE: 'Status changed',
   BULK_UPDATE: 'Bulk update', BULK_DELETE: 'Bulk delete', ACTIVATE: 'User activated', DEACTIVATE: 'User deactivated',
   LOCK: 'User locked', UNLOCK: 'User unlocked', PASSWORD_RESET: 'Password reset',
-  SERVICES_COMPLETED: 'Services set up', SCREENING_CHECK: 'Screening check', SCREENING_MATCH: 'Screening match',
+  SERVICES_COMPLETED: 'Services set up', PRINT: 'Printed', SCREENING_CHECK: 'Screening check', SCREENING_MATCH: 'Screening match',
   SCREENING_CLEAR: 'Screening clear',
   INVITE: 'Verification link sent', VERIFY: 'Verified with Fayda', DOCUMENT_REVIEW: 'Document checked',
   SCREEN: 'PEP / sanctions screening',
@@ -70,7 +70,7 @@ function actionColor(action: string, status?: string): string {
   if (['REJECT', 'DELETE', 'DEACTIVATE', 'LOCK', 'BULK_DELETE'].includes(action)) return 'bg-rose-100 text-rose-700';
   if (['RETURN', 'ESCALATE', 'PASSWORD_RESET'].includes(action)) return 'bg-amber-100 text-amber-700';
   if (['LOGIN', 'LOGOUT', 'LOGIN_OTP_SENT'].includes(action)) return 'bg-sky-100 text-sky-700';
-  if (action === 'VIEW' || action === 'EXPORT') return 'bg-gray-100 text-gray-700';
+  if (action === 'VIEW' || action === 'EXPORT' || action === 'PRINT') return 'bg-gray-100 text-gray-700';
   return 'bg-blue-100 text-blue-700';
 }
 

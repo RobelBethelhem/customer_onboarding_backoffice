@@ -72,14 +72,21 @@ body {
   aside,
   nav,
   button,
-  .no-print {
+  .no-print,
+  [data-sonner-toaster] {
     display: none !important;
   }
 
-  /* Show only the main content */
+  /* Show only the main content, over as many pages as it needs */
   main {
     width: 100% !important;
     max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
   }
 
   /* Optimize page breaks */

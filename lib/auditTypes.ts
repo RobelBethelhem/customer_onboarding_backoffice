@@ -18,7 +18,7 @@ export const AUDIT_ACTIONS = [
   // User management
   'ACTIVATE', 'DEACTIVATE', 'LOCK', 'UNLOCK', 'PASSWORD_RESET',
   // Personal Banker
-  'SERVICES_COMPLETED',
+  'SERVICES_COMPLETED', 'PRINT',
   // Screening
   'SCREENING_CHECK', 'SCREENING_MATCH', 'SCREENING_CLEAR',
   // Corporate accounts: SMS verification links, Fayda verification of each person, document checks

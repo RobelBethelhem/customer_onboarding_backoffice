@@ -6,10 +6,32 @@ import { sendSMS } from '@/lib/sms';
 import { normalizeServices, joinServiceLabels, servicesReadySms, serviceNamesFor } from '@/lib/services';
 import { audit } from '@/lib/audit';
 import { branchCodesFor } from '@/lib/ifbBranches';
+import { findServiceRequest } from '@/lib/serviceRequestAccess';
 
 export const dynamic = 'force-dynamic';
 
 const MAX_CUSTOM_MESSAGE = 300;
+
+/**
+ * GET /api/services/[customerId]
+ * The service request with the customer's contact, identity, address and account details — for the
+ * Personal Banker of the customer's branch, or admin.
+ */
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const found = await findServiceRequest(request, params.id);
+    if ('error' in found) return found.error;
+    const { customer } = found;
+    await audit(request, {
+      module: 'SERVICES', action: 'VIEW', entityType: 'Customer',
+      entityId: customer.customerId, entityName: customer.fullName, description: 'Viewed the service request',
+    });
+    return NextResponse.json({ success: true, data: customer });
+  } catch (error) {
+    console.error('[Services] Detail error:', error);
+    return NextResponse.json({ success: false, error: 'Failed to load the service request' }, { status: 500 });
+  }
+}
 
 /**
  * POST /api/services/[customerId]
