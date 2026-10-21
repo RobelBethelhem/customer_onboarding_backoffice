@@ -110,31 +110,45 @@ export const defaultFlexCubeConfig: FlexCubeConfig = {
 
 // ─── Account Class Mapping ────────────────────────────────────────────────────
 
+export interface AccountClassMapping {
+  productNumber: string; // tierId: the Product no. of the account class (Account Products)
+  accountClass: string;  // FlexCube ACCLS, e.g. 'DBSV'
+}
+
 /**
- * Maps application account type IDs to FlexCube ACCLS (Account Class) codes.
- * This is configured per bank — adjust values to match your FlexCube setup.
+ * FlexCube account class (ACCLS) of conventional accounts by product number, while "Use Account
+ * Product Codes" is off. Admins maintain the list in Settings → FlexCube (WorkflowSettings
+ * flexcubeAccountClassMap); this is what it holds until it is first saved there.
  */
-const ACCOUNT_CLASS_MAP: Record<string, string> = {
-  // Z-Club Special Saving tiers
-  '827':  'DBSV',
-  '838':    'DFCY',
-  '829':    'DPRS',
-  '828':    'DPSV',
-  // 'ZCLUB_S_PLT':    'SPRI',
-  // Z-Club Children Saving
-  // 'ZCLUB_CHILDREN': 'SPRI',
-  // Youth Special Saving tiers
-  '830':  'DZCL',
-  '835':      'DZSB',
-  '896':      'DZSG',
-  '837':      'DZSP',
-  '826':      'ZDAC',
+export const DEFAULT_ACCOUNT_CLASS_MAP: AccountClassMapping[] = [
+  { productNumber: '827', accountClass: 'DBSV' },
+  { productNumber: '838', accountClass: 'DFCY' },
+  { productNumber: '829', accountClass: 'DPRS' },
+  { productNumber: '828', accountClass: 'DPSV' },
+  { productNumber: '830', accountClass: 'DZCL' },
+  { productNumber: '835', accountClass: 'DZSB' },
+  { productNumber: '896', accountClass: 'DZSG' },
+  { productNumber: '837', accountClass: 'DZSP' },
+  { productNumber: '826', accountClass: 'ZDAC' },
+  { productNumber: '871', accountClass: 'ZDIF' },
+];
 
-  '871':      'ZDIF',
-};
+// Product numbers that are not in the list (Settings → FlexCube can change it)
+export const DEFAULT_ACCOUNT_CLASS = 'SPRI';
 
-export function getAccountClass(tierId: string): string {
-  return ACCOUNT_CLASS_MAP[tierId] || 'SPRI';
+export interface AccountClassSettings {
+  flexcubeAccountClassMap?: AccountClassMapping[] | null; // missing = never saved → DEFAULT_ACCOUNT_CLASS_MAP
+  flexcubeDefaultAccountClass?: string;
+}
+
+/** The product number → account class list in use (the saved one, else the defaults) */
+export function accountClassMapFor(settings?: AccountClassSettings | null): AccountClassMapping[] {
+  return Array.isArray(settings?.flexcubeAccountClassMap) ? settings!.flexcubeAccountClassMap! : DEFAULT_ACCOUNT_CLASS_MAP;
+}
+
+export function getAccountClass(tierId: string, settings?: AccountClassSettings | null): string {
+  const mapped = accountClassMapFor(settings).find(m => m.productNumber === tierId)?.accountClass;
+  return mapped || settings?.flexcubeDefaultAccountClass || DEFAULT_ACCOUNT_CLASS;
 }
 
 // IFB (interest-free) accounts while the Account Products codes aren't switched on (Settings → FlexCube).
@@ -147,12 +161,12 @@ export const DEFAULT_IFB_ACCOUNT_CODE = '126';
  * class (ACCLS) and the account-number code (tierId: the digits after the branch in the ACC
  * template, e.g. 664 126 XXXXXXXXXX).
  * - "Use account product codes" on: class code and product number from Account Products.
- * - Otherwise conventional accounts keep the class mapping (SPRI) and IFB accounts use the IFB
- *   account class and code from Settings.
+ * - Otherwise conventional accounts get the class of their product number (Settings → FlexCube,
+ *   getAccountClass) and IFB accounts use the IFB account class and code from Settings.
  */
 export function accountSetupFor(
   app: { isIFB: boolean; accountClassCode?: string; tierId?: string },
-  settings?: { useProductAccountClass?: boolean; flexcubeIfbAccountClass?: string; flexcubeIfbAccountCode?: string } | null
+  settings?: ({ useProductAccountClass?: boolean; flexcubeIfbAccountClass?: string; flexcubeIfbAccountCode?: string } & AccountClassSettings) | null
 ): { islamic: boolean; accountClass: string; tierId: string } {
   const catalogClass = settings?.useProductAccountClass ? app.accountClassCode || '' : '';
   if (app.isIFB) {
@@ -162,7 +176,7 @@ export function accountSetupFor(
       : { islamic: true, accountClass: settings?.flexcubeIfbAccountClass || DEFAULT_IFB_ACCOUNT_CLASS, tierId: ifbCode };
   }
   const tierId = app.tierId || '111';
-  return { islamic: false, accountClass: catalogClass || getAccountClass(tierId), tierId };
+  return { islamic: false, accountClass: catalogClass || getAccountClass(tierId, settings), tierId };
 }
 
 /** FCUBSIAService endpoint: as configured, else the account service URL on the same server */

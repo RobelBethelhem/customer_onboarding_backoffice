@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth, UserRole } from '@/components/AuthProvider';
 import IfbBranchSettings from '@/components/IfbBranchSettings';
+import AccountClassMapSettings, { AccountClassRow } from '@/components/AccountClassMapSettings';
 
 interface WorkflowSettings {
   mode: 'auto' | 'manual';
@@ -21,6 +22,10 @@ interface WorkflowSettings {
   flexcubeIaServiceUrl: string;    // IFB accounts (FCUBSIAService); '' = derived from the Account Service URL
   flexcubeIfbAccountClass: string;
   flexcubeIfbAccountCode: string;
+  // Conventional accounts: FlexCube class by product number (undefined until loaded, so a failed
+  // load never saves an empty list)
+  flexcubeAccountClassMap?: AccountClassRow[];
+  flexcubeDefaultAccountClass: string;
   flexcubeCustomerServiceUrl: string;
   flexcubeAccountServiceUrl: string;
   flexcubeUserId: string;
@@ -68,6 +73,7 @@ const defaultWorkflowSettings: WorkflowSettings = {
   flexcubeIaServiceUrl: '',
   flexcubeIfbAccountClass: 'WCSA',
   flexcubeIfbAccountCode: '126',
+  flexcubeDefaultAccountClass: 'SPRI',
   flexcubeCustomerServiceUrl: 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
   flexcubeAccountServiceUrl: 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
   flexcubeUserId: 'FYDA_USR',
@@ -97,6 +103,7 @@ export default function SettingsPage() {
   const defaultTab = visibleTabs.length > 0 ? visibleTabs[0].id : 'workflow';
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState('');
   const [loading, setLoading] = useState(true);
 
   const [settings, setSettings] = useState({
@@ -145,6 +152,12 @@ export default function SettingsPage() {
           flexcubeIaServiceUrl: data.data.flexcubeIaServiceUrl || '',
           flexcubeIfbAccountClass: data.data.flexcubeIfbAccountClass || 'WCSA',
           flexcubeIfbAccountCode: data.data.flexcubeIfbAccountCode || '126',
+          flexcubeAccountClassMap: Array.isArray(data.data.flexcubeAccountClassMap)
+            ? data.data.flexcubeAccountClassMap.map((r: any) => ({
+                productNumber: String(r?.productNumber || ''), accountClass: String(r?.accountClass || ''),
+              }))
+            : undefined,
+          flexcubeDefaultAccountClass: data.data.flexcubeDefaultAccountClass || 'SPRI',
           flexcubeCustomerServiceUrl: data.data.flexcubeCustomerServiceUrl || 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
           flexcubeAccountServiceUrl: data.data.flexcubeAccountServiceUrl || 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
           flexcubeUserId: data.data.flexcubeUserId || 'FYDA_USR',
@@ -163,6 +176,7 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setSaveStatus('saving');
+    setSaveError('');
 
     try {
       const response = await fetch('/api/workflow', {
@@ -183,11 +197,13 @@ export default function SettingsPage() {
         setTimeout(() => setSaveStatus('idle'), 2000);
       } else {
         setSaveStatus('error');
+        setSaveError(data.error || 'The settings could not be saved');
         setTimeout(() => setSaveStatus('idle'), 3000);
       }
     } catch (err) {
       console.error('Failed to save workflow settings:', err);
       setSaveStatus('error');
+      setSaveError('The settings could not be saved — check the connection and try again');
       setTimeout(() => setSaveStatus('idle'), 3000);
     }
   };
@@ -341,6 +357,12 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {saveError && (
+        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {saveError}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -704,8 +726,8 @@ export default function SettingsPage() {
                 <p className="font-medium text-gray-900">Use Account Product Codes as Account Class</p>
                 <p className="text-sm text-gray-500">
                   Open accounts with the class code from Account Products (ZDAC, DBSV, DWAD…). Turn on only once these
-                  classes exist in FlexCube — when off, accounts are opened with the default class (SPRI), and IFB
-                  accounts with the IFB account class below.
+                  classes exist in FlexCube — when off, accounts open with the class of their product number (Account
+                  Class by Product Number below), and IFB accounts with the IFB account class below.
                 </p>
               </div>
               <button
@@ -766,6 +788,18 @@ export default function SettingsPage() {
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"
                   />
                 </div>
+
+                {/* Conventional accounts: FlexCube account class by product number */}
+                <AccountClassMapSettings
+                  rows={workflowSettings.flexcubeAccountClassMap}
+                  defaultClass={workflowSettings.flexcubeDefaultAccountClass}
+                  productCodesOn={workflowSettings.useProductAccountClass}
+                  onChange={(rows, defaultClass) => setWorkflowSettings({
+                    ...workflowSettings,
+                    flexcubeAccountClassMap: rows,
+                    flexcubeDefaultAccountClass: defaultClass,
+                  })}
+                />
 
                 {/* IFB accounts are opened through FlexCube's Islamic Accounting service */}
                 <div className="p-4 border border-emerald-200 bg-emerald-50/50 rounded-lg space-y-4">

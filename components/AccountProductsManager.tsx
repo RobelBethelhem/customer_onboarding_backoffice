@@ -259,7 +259,7 @@ export default function AccountProductsManager() {
                   <th className="px-2 py-2 w-32">Min balance</th>
                   <th className="px-2 py-2 w-32">Max balance</th>
                   <th className="px-2 py-2">Remarks</th>
-                  <th className="px-2 py-2 w-24" title="Number sent to FlexCube in the account number template">Product no.</th>
+                  <th className="px-2 py-2 w-24" title="Number sent to FlexCube in the account number template; its FlexCube account class is set in Settings → FlexCube (Account Class by Product Number)">Product no.</th>
                   <th className="px-2 py-2 w-16">Active</th>
                   <th className="px-2 py-2 w-10" />
                 </tr>

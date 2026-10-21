@@ -17,6 +17,11 @@ export interface IWorkflowSettings extends Omit<Document, '_id'> {
   flexcubeIaServiceUrl: string;    // '' = the Account Service URL with FCUBSIAService
   flexcubeIfbAccountClass: string; // IFB account class while useProductAccountClass is off (WCSA)
   flexcubeIfbAccountCode: string;  // its account-number code: ACC template BRN + code + XXXXXXXXXX (126)
+  // Conventional accounts while useProductAccountClass is off: FlexCube class by product number
+  // (missing = never saved → DEFAULT_ACCOUNT_CLASS_MAP in lib/flexcube.ts); other numbers open as
+  // flexcubeDefaultAccountClass (SPRI)
+  flexcubeAccountClassMap?: { productNumber: string; accountClass: string }[];
+  flexcubeDefaultAccountClass: string;
   flexcubeCustomerServiceUrl: string;
   flexcubeAccountServiceUrl: string;
   flexcubeUserId: string;
@@ -75,6 +80,14 @@ const WorkflowSettingsSchema = new Schema<IWorkflowSettings>({
     type: String,
     default: '126',
   },
+  flexcubeAccountClassMap: {
+    type: [new Schema({ productNumber: String, accountClass: String }, { _id: false })],
+    default: undefined, // not [] — a list that was never saved means the defaults
+  },
+  flexcubeDefaultAccountClass: {
+    type: String,
+    default: 'SPRI',
+  },
   flexcubeEnabled: {
     type: Boolean,
     default: true,
@@ -131,6 +144,7 @@ export const defaultWorkflowSettings: Partial<IWorkflowSettings> = {
   flexcubeIaServiceUrl: '',
   flexcubeIfbAccountClass: 'WCSA',
   flexcubeIfbAccountCode: '126',
+  flexcubeDefaultAccountClass: 'SPRI',
   flexcubeCustomerServiceUrl: 'http://10.1.1.155:7107/FCUBSCustomerService/FCUBSCustomerService',
   flexcubeAccountServiceUrl: 'http://10.1.1.155:7107/FCUBSAccService/FCUBSAccService',
   flexcubeUserId: 'FYDA_USR',

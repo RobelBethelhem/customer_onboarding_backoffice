@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import WorkflowSettings, { defaultWorkflowSettings, IWorkflowSettings } from '@/lib/models/WorkflowSettings';
-import { audit, fieldChanges } from '@/lib/audit';
+import { audit, fieldChanges } from '@/lib/audit';
+import { accountClassMapFor, AccountClassMapping, DEFAULT_ACCOUNT_CLASS } from '@/lib/flexcube';
 
 // Always run on request: otherwise `next build` pre-renders this route, which freezes its data and makes saving (PUT) fail with 405
 export const dynamic = 'force-dynamic';
@@ -18,9 +19,12 @@ export async function GET() {
       settings = await WorkflowSettings.create(defaultWorkflowSettings);
     }
 
+    // The product number → account class list in use (the code's list until it is first saved)
+    const data = { ...settings.toObject(), flexcubeAccountClassMap: accountClassMapFor(settings) };
+
     return NextResponse.json({
       success: true,
-      data: settings,
+      data,
     });
   } catch (error) {
     console.error('Error fetching workflow settings:', error);
@@ -50,6 +54,8 @@ export async function PUT(request: Request) {
       flexcubeIaServiceUrl,
       flexcubeIfbAccountClass,
       flexcubeIfbAccountCode,
+      flexcubeAccountClassMap,
+      flexcubeDefaultAccountClass,
       // FlexCube SOAP configuration
       flexcubeCustomerServiceUrl,
       flexcubeAccountServiceUrl,
@@ -91,6 +97,19 @@ export async function PUT(request: Request) {
       }
       updateData.flexcubeIfbAccountCode = v;
     }
+    // Conventional accounts: FlexCube account class by product number (Settings → FlexCube)
+    if (flexcubeAccountClassMap !== undefined) {
+      const rows = parseAccountClassMap(flexcubeAccountClassMap);
+      if (typeof rows === 'string') return NextResponse.json({ success: false, error: rows }, { status: 400 });
+      updateData.flexcubeAccountClassMap = rows;
+    }
+    if (flexcubeDefaultAccountClass !== undefined) {
+      const v = String(flexcubeDefaultAccountClass).trim().toUpperCase();
+      if (v && !/^[A-Z0-9]{1,10}$/.test(v)) {
+        return NextResponse.json({ success: false, error: 'The account class for other product numbers must be letters or digits (e.g. SPRI)' }, { status: 400 });
+      }
+      updateData.flexcubeDefaultAccountClass = v || DEFAULT_ACCOUNT_CLASS;
+    }
     // FlexCube SOAP configuration
     if (flexcubeCustomerServiceUrl !== undefined) updateData.flexcubeCustomerServiceUrl = flexcubeCustomerServiceUrl;
     if (flexcubeAccountServiceUrl !== undefined) updateData.flexcubeAccountServiceUrl = flexcubeAccountServiceUrl;
@@ -103,7 +122,9 @@ export async function PUT(request: Request) {
     const sessionUser = request.headers.get('x-user-name') || request.headers.get('x-user-email');
     if (sessionUser) updateData.updatedBy = sessionUser;
 
-    const before = (await WorkflowSettings.findById('default').lean()) || {};
+    const saved: any = await WorkflowSettings.findById('default').lean();
+    // a list that was never saved is the code's list, so saving it unchanged is no change
+    const before = saved ? { ...saved, flexcubeAccountClassMap: accountClassMapFor(saved) } : {};
 
     // Upsert - create if not exists, update if exists
     const settings = await WorkflowSettings.findByIdAndUpdate(
@@ -133,4 +154,26 @@ export async function PUT(request: Request) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Rows of the account class list as saved: product number (digits, once each) and FlexCube class.
+ * Empty rows are dropped. Returns the error message when a row is not valid.
+ */
+function parseAccountClassMap(value: unknown): AccountClassMapping[] | string {
+  if (!Array.isArray(value)) return 'The account class list must be a list';
+  if (value.length > 200) return 'The account class list can have at most 200 rows';
+  const rows: AccountClassMapping[] = [];
+  const seen = new Set<string>();
+  for (const r of value) {
+    const productNumber = String(r?.productNumber ?? '').trim();
+    const accountClass = String(r?.accountClass ?? '').trim().toUpperCase();
+    if (!productNumber && !accountClass) continue;
+    if (!/^\d{1,5}$/.test(productNumber)) return `Account classes: the product number must be digits (e.g. 827)${accountClass ? ` — row ${accountClass}` : ''}`;
+    if (!/^[A-Z0-9]{1,10}$/.test(accountClass)) return `Account classes: enter the FlexCube account class for product number ${productNumber} (letters or digits, e.g. DBSV)`;
+    if (seen.has(productNumber)) return `Account classes: product number ${productNumber} is listed twice`;
+    seen.add(productNumber);
+    rows.push({ productNumber, accountClass });
+  }
+  return rows;
 }
