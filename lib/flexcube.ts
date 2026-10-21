@@ -116,19 +116,21 @@ export const defaultFlexCubeConfig: FlexCubeConfig = {
  */
 const ACCOUNT_CLASS_MAP: Record<string, string> = {
   // Z-Club Special Saving tiers
-  '021':  'SPRI',
-  '141':    'SPRI',
-  '151':    'SPRI',
-  '161':    'SPRI',
+  '827':  'DBSV',
+  '838':    'DFCY',
+  '829':    'DPRS',
+  '828':    'DPSV',
   // 'ZCLUB_S_PLT':    'SPRI',
   // Z-Club Children Saving
   // 'ZCLUB_CHILDREN': 'SPRI',
   // Youth Special Saving tiers
-  '341':  'SPRI',
-  '140':      'SPRI',
-  '111':      'SPRI',
-  '101':      'SPRI',
-  '110':      'SPRI',
+  '830':  'DZCL',
+  '835':      'DZSB',
+  '896':      'DZSG',
+  '837':      'DZSP',
+  '826':      'ZDAC',
+
+  '871':      'ZDIF',
 };
 
 export function getAccountClass(tierId: string): string {
@@ -610,7 +612,7 @@ function buildCreateAccountEnvelope(data: CreateAccountRequest, config: FlexCube
       <fcub:${svc.request}>
          <fcub:FCUBS_HEADER>
                 <fcub:SOURCE>${escapeXml(config.source)}</fcub:SOURCE>
-                <fcub:UBSCOMP>FCUBS</fcub:UBSCOMP>
+                <fcub:UBSCOMP>FCUBS</fcub:UBSCOMP>  
                 <fcub:CORRELID>${correlId}</fcub:CORRELID>
                 <fcub:BRANCH>${escapeXml(branch)}</fcub:BRANCH>
                 <fcub:USERID>${escapeXml(config.userId)}</fcub:USERID>
