@@ -22,8 +22,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Session expired' }, { status: 401 });
     }
   } catch (e) {
+    // The database did not answer: not the user's fault — keep them signed in and let them retry
     console.error('[Auth] me check failed:', e);
-    return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
+    return NextResponse.json({ success: false, error: 'Please try again in a moment' }, { status: 503 });
   }
 
   return NextResponse.json({

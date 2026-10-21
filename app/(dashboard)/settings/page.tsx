@@ -93,6 +93,8 @@ const allTabs: Array<{ id: string; label: string; icon: any; roles: UserRole[] }
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  // Workflow and FlexCube settings are changed by admin only; KYC officers see them read-only
+  const isAdmin = user?.role === 'admin';
   const [showPassword, setShowPassword] = useState(false);
 
   const visibleTabs = useMemo(() =>
@@ -320,7 +322,7 @@ export default function SettingsPage() {
             <RefreshCw className="w-4 h-4" />
             Refresh
           </button>
-          <button
+          {isAdmin && <button
             onClick={handleSave}
             disabled={saveStatus === 'saving'}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-all ${
@@ -354,7 +356,7 @@ export default function SettingsPage() {
                 Save Changes
               </>
             )}
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -384,12 +386,19 @@ export default function SettingsPage() {
         </nav>
       </div>
 
+      {!isAdmin && activeTab === 'workflow' && (
+        <div className="flex items-start gap-2 p-3 bg-sky-50 border border-sky-200 rounded-lg text-sm text-sky-900">
+          <Eye className="w-4 h-4 mt-0.5 shrink-0" />
+          View only — the workflow and FlexCube settings are changed by an administrator.
+        </div>
+      )}
+
       {/* Branch directory incl. IFB codes (admin) — has its own Save button */}
       {activeTab === 'ifb' && <IfbBranchSettings />}
 
       {/* Workflow Settings Tab */}
       {activeTab === 'workflow' && (
-        <div className="space-y-6">
+        <fieldset disabled={!isAdmin} className="space-y-6 min-w-0 border-0 p-0 m-0">
           {/* API Endpoint Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
             <div className="flex items-start gap-3">
@@ -937,7 +946,7 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
-        </div>
+        </fieldset>
       )}
 
       {/* Referral Program Tab */}

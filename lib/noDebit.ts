@@ -47,6 +47,7 @@ export async function applyNoDebit(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accountNumber }),
+      signal: AbortSignal.timeout(30000), // a hung Fayda backend must not hold the approval
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.success) {

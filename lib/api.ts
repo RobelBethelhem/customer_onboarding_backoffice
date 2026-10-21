@@ -115,6 +115,8 @@ export interface Customer {
     id: string; name: string; icon?: string; termsRequired?: boolean; termsTitle?: string;
     termsVersion?: number; termsAcceptedVersion?: number; termsAcceptedAt?: string;
   }[];
+  // Foreign national: passport and work permit / Origin ID (files at /api/corporate/files/:fileId)
+  foreignDocuments?: { type: 'passport' | 'work_permit' | 'origin_id'; fileId: string; fileName: string; mimeType: string; size: number; uploadedAt?: string }[];
   // Web app face check by the Fayda backend (see FaceVerificationResult)
   faceVerification?: FaceVerificationResult;
   livenessFrames?: { action: string; label: string; image: string }[];
@@ -190,12 +192,16 @@ export async function fetchCustomers(options?: {
   search?: string;
   limit?: number;
   skip?: number;
+  counts?: boolean;   // also the number of applications per status (dashboard)
+  fields?: 'stats';   // only the fields the dashboard charts use
 }): Promise<CustomerResponse> {
   const params = new URLSearchParams();
   if (options?.status) params.set('status', options.status);
   if (options?.search) params.set('search', options.search);
   if (options?.limit) params.set('limit', options.limit.toString());
   if (options?.skip) params.set('skip', options.skip.toString());
+  if (options?.counts) params.set('counts', '1');
+  if (options?.fields) params.set('fields', options.fields);
 
   const response = await fetch(`${API_BASE}/customers?${params.toString()}`);
   if (!response.ok) {

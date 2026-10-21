@@ -112,46 +112,70 @@ import User from '@/lib/models/User';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { requireRole } from '@/lib/apiAuth';
 import { audit } from '@/lib/audit';
+import { escapeRegex } from '@/lib/regex';
 
 // Roles tied to one branch — they must be given a branch code
 const BRANCH_ROLES = ['branch', 'personal_banker'];
 
-// GET /api/users - List all users (admin only)
+const ROLES = ['admin', 'kyc', 'marketing', 'branch', 'senior_approver', 'sanction_uploader', 'personal_banker', 'auditor'];
+
+/**
+ * GET /api/users?page=1&limit=20&search=&status=all|active|inactive|locked&role= — one page of
+ * users (admin only), newest first, with the number of users in each status for the filters.
+ * Only the fields the page shows: never the password hash or sign-in codes.
+ */
 export async function GET(request: NextRequest) {
-  // Server-side authorization
-  // Only users with the "admin" role can access the user list.
   const denied = requireRole(request, ['admin']);
-  if (denied) {
-    return denied;
-  }
+  if (denied) return denied;
 
   try {
     await connectToDatabase();
 
-    /*
-     * Security:
-     * Do NOT return the complete User document.
-     *
-     * We explicitly select only the fields required by the UI.
-     * This prevents sensitive fields such as:
-     *
-     * - passwordHash
-     * - loginOtpHash
-     * - loginOtpExpires
-     *
-     * from being serialized in the API response.
-     *
-     * If your UI needs additional NON-SENSITIVE fields, add them
-     * explicitly to this list.
-     */
-    const users = await User.find({})
-      .select('_id email name phone role branchCode isActive createdAt')
-      .sort({ createdAt: -1 })
-      .lean();
+    const params = request.nextUrl.searchParams;
+    const page = Math.max(1, parseInt(params.get('page') || '1', 10) || 1);
+    const limit = Math.min(100, Math.max(5, parseInt(params.get('limit') || '20', 10) || 20));
+    const search = (params.get('search') || '').trim().slice(0, 100);
+    const status = params.get('status') || 'all';
+    const role = params.get('role') || '';
+
+    const query: Record<string, any> = {};
+    if (search) {
+      const pattern = new RegExp(escapeRegex(search), 'i');
+      query.$or = [{ name: pattern }, { email: pattern }, { phone: pattern }, { branchCode: pattern }];
+    }
+    if (status === 'active') { query.isActive = { $ne: false }; query.isLocked = { $ne: true }; }
+    else if (status === 'inactive') query.isActive = false;
+    else if (status === 'locked') query.isLocked = true;
+    if (ROLES.includes(role)) query.role = role;
+
+    const [users, total, counts] = await Promise.all([
+      User.find(query)
+        .select('_id email name phone role branchCode isActive isLocked lastLogin createdAt')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(query),
+      User.aggregate([{
+        $group: {
+          _id: null,
+          all: { $sum: 1 },
+          active: { $sum: { $cond: [{ $and: [{ $ne: ['$isActive', false] }, { $ne: ['$isLocked', true] }] }, 1, 0] } },
+          inactive: { $sum: { $cond: [{ $eq: ['$isActive', false] }, 1, 0] } },
+          locked: { $sum: { $cond: [{ $eq: ['$isLocked', true] }, 1, 0] } },
+        },
+      }]),
+    ]);
+    const { _id, ...statusCounts } = counts[0] || { _id: null, all: 0, active: 0, inactive: 0, locked: 0 };
 
     return NextResponse.json({
       success: true,
       users,
+      total,
+      page,
+      limit,
+      pages: Math.max(1, Math.ceil(total / limit)),
+      counts: statusCounts,
     });
   } catch (error: any) {
     console.error('[Users] List error:', error);

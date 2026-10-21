@@ -4,6 +4,7 @@ import SanctionEntry from '@/lib/models/SanctionEntry';
 import SanctionSource, { defaultSources } from '@/lib/models/SanctionSource';
 import AuditLog, { calculateChanges } from '@/lib/models/AuditLog';
 import { auditContext } from '@/lib/audit';
+import { invalidateScreeningLists } from '@/lib/sanctionsScreening';
 
 // Generate unique audit ID
 function generateAuditId(): string {
@@ -198,6 +199,7 @@ export async function POST(request: Request) {
       timestamp: new Date(),
     });
 
+    invalidateScreeningLists(); // screening uses the new lists right away
     return NextResponse.json({
       success: true,
       data: entry,

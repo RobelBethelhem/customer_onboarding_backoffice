@@ -6,6 +6,8 @@ export const defaultAdditionalServices = (): IAdditionalService[] =>
 
 /** The additional services catalog (Products & Services page), seeded with the defaults on first use */
 export async function getAdditionalServices(): Promise<IAdditionalService[]> {
+  const saved = await AdditionalServiceSettings.findById('default').lean() as any;
+  if (saved) return saved.services || [];
   const doc = await AdditionalServiceSettings.findOneAndUpdate(
     { _id: 'default' },
     { $setOnInsert: { services: defaultAdditionalServices(), updatedBy: 'system (default catalog)' } },

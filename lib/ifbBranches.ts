@@ -10,6 +10,8 @@ export const defaultBranches = (): IBranch[] => DEFAULT_BRANCHES.map(b => ({ ...
  * first use; an older IFB-codes-only table is upgraded once, keeping the IFB codes saved in it.
  */
 export async function getBranches(): Promise<IBranch[]> {
+  const current = await IfbBranchSettings.findById('default').lean() as any;
+  if (current && (current.version || 1) >= DIRECTORY_VERSION) return current.mappings || [];
   const doc = await IfbBranchSettings.findOneAndUpdate(
     { _id: 'default' },
     { $setOnInsert: { version: DIRECTORY_VERSION, mappings: defaultBranches(), updatedBy: 'system (default list)' } },

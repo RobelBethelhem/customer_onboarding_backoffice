@@ -35,6 +35,7 @@ export async function GET(
       headers: {
         'Accept': 'video/webm, video/mp4, */*',
       },
+      signal: AbortSignal.timeout(120000),
     });
 
     if (!response.ok) {

@@ -12,6 +12,8 @@
  * Both calls use the same SOAP envelope structure with FCUBS_HEADER + FCUBS_BODY.
  */
 
+import { nationalityCode } from '@/lib/nationality';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface FlexCubeConfig {
@@ -479,7 +481,7 @@ function buildCreateCustomerEnvelope(data: CreateCIFRequest, config: FlexCubeCon
                     <fcub:ADDRLN4>${escapeXml(data.houseNumber || 'NO')}</fcub:ADDRLN4>
                     <fcub:COUNTRY>ET</fcub:COUNTRY>
                     <fcub:SNAME>${escapeXml(shortName.substring(0, 25))}</fcub:SNAME>
-                    <fcub:NLTY>ET</fcub:NLTY>
+                    <fcub:NLTY>${escapeXml(data.nationality || 'ET')}</fcub:NLTY>
                     <fcub:CCATEG>INDI</fcub:CCATEG>
                     <fcub:FULLNAME>${escapeXml(data.fullName.toUpperCase())}</fcub:FULLNAME>
                     <fcub:MEDIA>MAIL</fcub:MEDIA>
@@ -1132,6 +1134,7 @@ export async function createCustomerAndAccount(
     motherMaidenName: string;
     taxIdentity?: string;
     maritalStatus: string;
+    nationality?: string;    // as Fayda gives it (e.g. 'Kenya'); empty = Ethiopian
     uin: string;
     region: string;
     zone: string;
@@ -1166,9 +1169,12 @@ export async function createCustomerAndAccount(
   message: string;
 }> {
   // ── Step 1: Create CIF ──
+  // Nationality as an ISO code (ET for Ethiopians); a foreign country with no known code is sent as ET
+  const nationality = nationalityCode(customerData.nationality);
+  if (!nationality) console.warn(`[FlexCube] No country code for nationality "${customerData.nationality}" — sent as ET, correct it in FlexCube`);
   const cifResult = await createCIF({
     ...customerData,
-    nationality: 'ET',
+    nationality: nationality || 'ET',
   }, config);
 
   if (!cifResult.success || !cifResult.cifNumber) {

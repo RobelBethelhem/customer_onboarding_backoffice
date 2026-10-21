@@ -219,6 +219,7 @@ export async function PATCH(
               motherMaidenName: customer.motherMaidenName || '',
               taxIdentity: customer.taxIdentity || '',
               maritalStatus: customer.maritalStatus || 'S',
+              nationality: customer.nationality || '',
               uin: customer.uin || '',
               region: customer.region || '',
               zone: customer.zone || '',
@@ -354,6 +355,7 @@ export async function PATCH(
         try {
           const photoRes = await fetch(`${FAYDA_BACKEND_URL}/api/flexcube/save-customer-photo`, {
             method: 'POST',
+            signal: AbortSignal.timeout(30000),
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               customerNo: cifNumber,
@@ -437,7 +439,7 @@ export async function PATCH(
                   { customerNumber: referrerCustNo },
                   { cifNumber: referrerCustNo },
                 ],
-              });
+              }).select('customerId referralCode').lean() as any;
               if (referrerCustomer?.referralCode) {
                 referrerAsReferee = await Referral.findOne({
                   refereeCustomerId: referrerCustomer.customerId,

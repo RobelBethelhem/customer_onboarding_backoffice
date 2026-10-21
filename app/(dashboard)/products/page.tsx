@@ -1,15 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Package, Layers, Smartphone, Building2 } from 'lucide-react';
+import { Package, Layers, Smartphone, Building2, Eye } from 'lucide-react';
+import { useAuth } from '@/components/AuthProvider';
 import AccountProductsManager from '@/components/AccountProductsManager';
 import AdditionalServicesManager from '@/components/AdditionalServicesManager';
 import CorporateCatalogManager from '@/components/CorporateCatalogManager';
 
 type Tab = 'products' | 'services' | 'business';
 
-// What customers can choose in the web app — managed by KYC officers (and admin)
+// What customers can choose in the web app — changed by admin; KYC officers see it read-only
 export default function ProductsAndServicesPage() {
+  const { user } = useAuth();
+  const readOnly = user?.role !== 'admin';
   const [tab, setTab] = useState<Tab>('products');
 
   // ?tab=services / ?tab=business opens that tab directly
@@ -38,6 +41,13 @@ export default function ProductsAndServicesPage() {
         <p className="text-sm text-gray-500 mt-1">What customers can choose in the web app. Changes apply as soon as you save.</p>
       </div>
 
+      {readOnly && (
+        <div className="flex items-start gap-2 p-3 bg-sky-50 border border-sky-200 rounded-lg text-sm text-sky-900">
+          <Eye className="w-4 h-4 mt-0.5 shrink-0" />
+          View only — products, services and business account settings are changed by an administrator.
+        </div>
+      )}
+
       <div className="border-b border-gray-200">
         <nav className="flex gap-6 overflow-x-auto">
           {tabs.map(t => (
@@ -56,9 +66,9 @@ export default function ProductsAndServicesPage() {
       </div>
 
       {/* Both stay mounted so unsaved edits survive switching tabs */}
-      <div className={tab === 'products' ? '' : 'hidden'}><AccountProductsManager /></div>
-      <div className={tab === 'services' ? '' : 'hidden'}><AdditionalServicesManager /></div>
-      <div className={tab === 'business' ? '' : 'hidden'}><CorporateCatalogManager /></div>
+      <div className={tab === 'products' ? '' : 'hidden'}><AccountProductsManager readOnly={readOnly} /></div>
+      <div className={tab === 'services' ? '' : 'hidden'}><AdditionalServicesManager readOnly={readOnly} /></div>
+      <div className={tab === 'business' ? '' : 'hidden'}><CorporateCatalogManager readOnly={readOnly} /></div>
     </div>
   );
 }

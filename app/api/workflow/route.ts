@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import WorkflowSettings, { defaultWorkflowSettings, IWorkflowSettings } from '@/lib/models/WorkflowSettings';
 import { audit, fieldChanges } from '@/lib/audit';
 import { accountClassMapFor, AccountClassMapping, DEFAULT_ACCOUNT_CLASS } from '@/lib/flexcube';
+import { requireRole } from '@/lib/apiAuth';
 
 // Always run on request: otherwise `next build` pre-renders this route, which freezes its data and makes saving (PUT) fail with 405
 export const dynamic = 'force-dynamic';
@@ -35,8 +36,10 @@ export async function GET() {
   }
 }
 
-// PUT - Update workflow settings
-export async function PUT(request: Request) {
+// PUT - Update workflow settings (admin only; KYC officers see them read-only)
+export async function PUT(request: NextRequest) {
+  const denied = requireRole(request, ['admin']);
+  if (denied) return denied;
   try {
     await connectToDatabase();
 

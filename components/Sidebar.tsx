@@ -55,6 +55,18 @@ const menuItems: MenuItem[] = [
   { name: 'Audit Log', href: '/audit-logs', icon: History, roles: ['admin', 'auditor'] },
 ];
 
+/**
+ * Run `fetchCount` now and every minute while the tab is visible (badge counts); again as soon as
+ * the tab is shown. Returns the cleanup.
+ */
+function pollWhileVisible(fetchCount: () => void, everyMs = 60000) {
+  fetchCount();
+  const interval = setInterval(() => { if (!document.hidden) fetchCount(); }, everyMs);
+  const onShow = () => { if (!document.hidden) fetchCount(); };
+  document.addEventListener('visibilitychange', onShow);
+  return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onShow); };
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
@@ -68,20 +80,12 @@ export default function Sidebar() {
   );
 
   useEffect(() => {
-    if (user && (user.role === 'admin' || user.role === 'kyc')) {
-      fetchPendingCount();
-      const interval = setInterval(fetchPendingCount, 30000);
-      return () => clearInterval(interval);
-    }
+    if (user && (user.role === 'admin' || user.role === 'kyc')) return pollWhileVisible(fetchPendingCount);
   }, [user]);
 
   // Business accounts waiting: pending / in review for KYC and admin, escalated for Senior Approvers
   useEffect(() => {
-    if (user && ['admin', 'kyc', 'senior_approver'].includes(user.role)) {
-      fetchCorporateCount();
-      const interval = setInterval(fetchCorporateCount, 30000);
-      return () => clearInterval(interval);
-    }
+    if (user && ['admin', 'kyc', 'senior_approver'].includes(user.role)) return pollWhileVisible(fetchCorporateCount);
   }, [user]);
 
   async function fetchCorporateCount() {
@@ -96,19 +100,15 @@ export default function Sidebar() {
   }
 
   useEffect(() => {
-    if (user?.role === 'personal_banker') {
-      fetchServicesCount();
-      const interval = setInterval(fetchServicesCount, 30000);
-      return () => clearInterval(interval);
-    }
+    if (user?.role === 'personal_banker') return pollWhileVisible(fetchServicesCount);
   }, [user]);
 
   async function fetchServicesCount() {
     try {
-      const response = await fetch('/api/services?status=pending');
+      const response = await fetch('/api/services?status=pending&countOnly=1');
       const data = await response.json();
       if (data.success) {
-        setServicesCount(data.data.length);
+        setServicesCount(data.total);
       }
     } catch (err) {
       console.error('Failed to fetch service request count:', err);
@@ -117,7 +117,7 @@ export default function Sidebar() {
 
   async function fetchPendingCount() {
     try {
-      const response = await fetch('/api/customers?status=pending_all&limit=0');
+      const response = await fetch('/api/customers?status=pending_all&countOnly=1');
       const data = await response.json();
       if (data.success) {
         setPendingCount(data.total);

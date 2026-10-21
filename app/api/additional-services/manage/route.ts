@@ -9,7 +9,9 @@ import { SERVICE_ICON_KEYS } from '@/lib/serviceIcons';
 // Always run on request (a pre-rendered route would freeze the data and reject PUT with 405)
 export const dynamic = 'force-dynamic';
 
+// KYC officers can look at the catalog; only admin changes it
 const MANAGERS = ['kyc', 'admin'] as const;
+const EDITORS = ['admin'] as const;
 const MAX_TERMS = 20000;
 const bad = (error: string) => NextResponse.json({ success: false, error }, { status: 400 });
 
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
  * so each application records exactly which terms the customer accepted.
  */
 export async function PUT(request: NextRequest) {
-  const denied = requireRole(request, [...MANAGERS]);
+  const denied = requireRole(request, [...EDITORS]);
   if (denied) return denied;
   try {
     await connectToDatabase();

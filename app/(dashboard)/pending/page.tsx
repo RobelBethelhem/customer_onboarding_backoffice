@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, Clock, CheckCircle, Search, Filter, Eye, Camera, Loader2, Lock } from 'lucide-react';
 import Link from 'next/link';
+import LoadMore from '@/components/LoadMore';
 import { fetchCustomers, Customer, getStatusColor, getStatusLabel, formatDate } from '@/lib/api';
 import { ensureDataUri } from '@/lib/imageUtils';
 
@@ -18,6 +19,8 @@ export default function PendingReviewPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'verified' | 'in_review'>('all');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [total, setTotal] = useState(0); // in the list at the bank (100 are loaded at a time)
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,12 +34,29 @@ export default function PendingReviewPage() {
       const response = await fetchCustomers({ status: 'pending_all' });
       if (response.success) {
         setCustomers(response.data);
+        setTotal(response.total);
       }
     } catch (err) {
       setError('Failed to load data');
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // The next 100 of the list
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const response = await fetchCustomers({ status: 'pending_all', skip: customers.length });
+      if (response.success) {
+        setCustomers(prev => [...prev, ...response.data.filter(c => !prev.some(p => p.customerId === c.customerId))]);
+        setTotal(response.total);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -317,6 +337,8 @@ export default function PendingReviewPage() {
           </div>
         )}
       </div>
+
+      <LoadMore shown={customers.length} total={total} loading={loadingMore} onClick={loadMore} />
     </div>
   );
 }

@@ -85,6 +85,8 @@ ReferralSchema.index({ referralCode: 1, refereeCustomerId: 1 }, { unique: true }
 ReferralSchema.index({ referrerCustomerNumber: 1, status: 1 });
 // Index for ancestor chain multi-level queries
 ReferralSchema.index({ ancestorChain: 1 });
+// who referred a customer, looked up by the customer's CIF (refereeCustomerId has its own index)
+ReferralSchema.index({ refereeCustomerNumber: 1 });
 
 let Referral: Model<IReferral>;
 

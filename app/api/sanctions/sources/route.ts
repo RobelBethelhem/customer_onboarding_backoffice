@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import SanctionSource, { defaultSources } from '@/lib/models/SanctionSource';
 import SanctionEntry from '@/lib/models/SanctionEntry';
+import { invalidateScreeningLists } from '@/lib/sanctionsScreening';
 
 // Initialize default sources if they don't exist
 async function initializeSources() {
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
       createdBy,
     });
 
+    invalidateScreeningLists(); // screening uses the new lists right away
     return NextResponse.json({
       success: true,
       data: source,

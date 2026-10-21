@@ -12,7 +12,9 @@ import { DEFAULT_CORPORATE_RULES } from '@/lib/corporateCatalogDefaults';
 // Always run on request (a pre-rendered route would freeze the data and reject PUT with 405)
 export const dynamic = 'force-dynamic';
 
+// KYC officers can look at the catalog; only admin changes it
 const MANAGERS = ['kyc', 'admin'] as const;
+const EDITORS = ['admin'] as const;
 const bad = (error: string) => NextResponse.json({ success: false, error }, { status: 400 });
 const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
 const slug = (name: string, fallback: string) =>
@@ -55,7 +57,7 @@ export async function GET(request: NextRequest) {
 
 /** PUT /api/corporate/catalog — replace categories (order = display order) and rules. Body: { categories, rules } */
 export async function PUT(request: NextRequest) {
-  const denied = requireRole(request, [...MANAGERS]);
+  const denied = requireRole(request, [...EDITORS]);
   if (denied) return denied;
   try {
     await connectToDatabase();

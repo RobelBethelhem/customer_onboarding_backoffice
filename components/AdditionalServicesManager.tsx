@@ -51,7 +51,8 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: () => void; la
 }
 
 /** Additional Services tab of the Products & Services page (KYC officers, admin) */
-export default function AdditionalServicesManager() {
+/** readOnly: everyone but admin sees the catalog without being able to change it */
+export default function AdditionalServicesManager({ readOnly = false }: { readOnly?: boolean }) {
   const [services, setServices] = useState<Service[]>([]);
   const [defaults, setDefaults] = useState<Service[]>([]);
   const [meta, setMeta] = useState<{ updatedBy?: string; updatedAt?: string }>({});
@@ -121,7 +122,7 @@ export default function AdditionalServicesManager() {
   const input = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500';
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={readOnly} className="space-y-5 min-w-0 border-0 p-0 m-0">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-sm text-gray-500">
           Services customers can ask for with their new account; the branch Personal Banker sets them up. Turn a
@@ -131,6 +132,7 @@ export default function AdditionalServicesManager() {
             <> Last changed {new Date(meta.updatedAt).toLocaleString()}{meta.updatedBy ? ` by ${meta.updatedBy}` : ''}.</>
           )}
         </p>
+        {!readOnly && (
         <div className="flex flex-wrap gap-2 shrink-0">
           {missingDefaults.length > 0 && (
             <button type="button" onClick={() => update([...services, ...missingDefaults.map(withUi)])}
@@ -143,6 +145,7 @@ export default function AdditionalServicesManager() {
             <Plus className="w-4 h-4" /> Add service
           </button>
         </div>
+        )}
       </div>
 
       {message && (
@@ -244,6 +247,7 @@ export default function AdditionalServicesManager() {
       )}
 
       {/* Save bar */}
+      {!readOnly && (
       <div className="sticky bottom-0 bg-white/95 backdrop-blur border rounded-xl shadow-sm px-4 py-3 flex items-center justify-end gap-3 z-30">
         {dirty && <span className="text-sm text-amber-700 mr-auto sm:mr-0">Unsaved changes</span>}
         {dirty && (
@@ -256,6 +260,7 @@ export default function AdditionalServicesManager() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save
         </button>
       </div>
-    </div>
+      )}
+    </fieldset>
   );
 }

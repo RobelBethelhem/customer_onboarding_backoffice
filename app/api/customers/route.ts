@@ -3,16 +3,32 @@ import { connectToDatabase } from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
 import { audit } from '@/lib/audit';
 import { branchCodesFor } from '@/lib/ifbBranches';
+import { escapeRegex } from '@/lib/regex';
 
+// Lists never carry the large images (selfie, check photos, live-check frames, scans) — the
+// application page loads them. The small Fayda photo stays for the thumbnails.
+const LIST_EXCLUDE = '-livenessFrames -selfiePhoto -verificationPhotos -marriageCertificatePhoto -faceVerification';
+// Dashboard charts (fields=stats): only what they count
+const STATS_FIELDS = 'customerId status accountType accountTypeName branch createdAt faceMatchScore';
+const STATUSES = ['pending', 'verified', 'approved', 'auto_approved', 'rejected', 'escalated', 'returned', 'in_review'] as const;
+
+/**
+ * GET /api/customers?status=&search=&limit=&skip=
+ *   &countOnly=1  → only { total } (sidebar badges); limit=0 means the same
+ *   &counts=1     → also the number of applications in each status (dashboard)
+ *   &fields=stats → only the fields the dashboard charts use
+ */
 export async function GET(request: NextRequest) {
   try {
     await connectToDatabase();
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
-    const search = searchParams.get('search');
-    const limit = parseInt(searchParams.get('limit') || '100');
-    const skip = parseInt(searchParams.get('skip') || '0');
+    const search = (searchParams.get('search') || '').trim().slice(0, 100);
+    const rawLimit = searchParams.get('limit');
+    const countOnly = searchParams.get('countOnly') === '1' || rawLimit === '0';
+    const limit = Math.min(1000, Math.max(1, parseInt(rawLimit || '100', 10) || 100));
+    const skip = Math.max(0, parseInt(searchParams.get('skip') || '0', 10) || 0);
 
     // Branch role: force filter to approved customers of their branch only
     const userRole = request.headers.get('x-user-role');
@@ -35,33 +51,32 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Search by name or ID
+    // Search by name or ID (typed text, not a pattern)
     if (search) {
+      const pattern = new RegExp(escapeRegex(search), 'i');
       query.$or = [
-        { fullName: { $regex: search, $options: 'i' } },
-        { customerId: { $regex: search, $options: 'i' } },
-        { customerNumber: { $regex: search, $options: 'i' } },
+        { fullName: pattern },
+        { customerId: pattern },
+        { customerNumber: pattern },
       ];
     }
 
+    const total = await Customer.countDocuments(query);
+    if (countOnly) return NextResponse.json({ success: true, data: [], total });
+
     const customers = await Customer.find(query)
-      .select('-livenessFrames') // live-check images: on the detail page only
+      .select(searchParams.get('fields') === 'stats' ? STATS_FIELDS : LIST_EXCLUDE)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean();
 
-    const total = await Customer.countDocuments(query);
+    if (searchParams.get('counts') !== '1') {
+      return NextResponse.json({ success: true, data: customers, total });
+    }
 
-    // Get counts by status
-    const counts = await Customer.aggregate([
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+    // Applications per status, each counted from the status index (no full scan)
+    const counts = await Promise.all(STATUSES.map(async s => ({ _id: s, count: await Customer.countDocuments({ status: s }) })));
 
     const statusCounts = {
       total: 0,

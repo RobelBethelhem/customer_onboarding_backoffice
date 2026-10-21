@@ -40,7 +40,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const customer = await Customer.findOne({ customerId: appId }).lean() as any;
+    const customer = await Customer.findOne({ customerId: appId })
+      .select('customerId fullName phone status returnReason rejectionReason customerNumber cifNumber')
+      .lean() as any;
     if (!customer) {
       return NextResponse.json(
         { success: false, found: false, error: 'No application found for that ID' },

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
 import WorkflowSettings, { defaultWorkflowSettings } from '@/lib/models/WorkflowSettings';
+import { nextNumber } from '@/lib/models/Counter';
 import { createCustomerAndAccount, accountSetupFor, FlexCubeConfig, queryCustomerByCustNo } from '@/lib/flexcube';
 import Referral, { migrateReferralIndexes } from '@/lib/models/Referral';
 import ReferralConfig, { defaultReferralConfig } from '@/lib/models/ReferralConfig';
@@ -16,6 +17,9 @@ import { isIfbProduct } from '@/lib/ifbBranchRules';
 import { ifbBranchFor, getBranches } from '@/lib/ifbBranches';
 import { findAccountClass } from '@/lib/accountProducts';
 import { accountCurrency, FCY_CURRENCIES } from '@/lib/currencies';
+import { isForeignNational } from '@/lib/nationality';
+import { checkForeignDocuments, claimForeignDocuments } from '@/lib/foreignDocuments';
+import type { ForeignDocument } from '@/lib/foreignDocumentTypes';
 
 // Run referral index migration once on first request
 let referralIndexesMigrated = false;
@@ -24,13 +28,14 @@ let referralIndexesMigrated = false;
 export const maxDuration = 60; // seconds
 export const dynamic = 'force-dynamic';
 
-// Generate unique customer ID
-// Next Application ID: one above the highest number in use (not the newest record — creation
-// order and ID order can differ, which gave an ID that already exists → duplicate key → 500)
+// Next Application ID (ZMN-00001 …) from a counter; the first time it continues above the highest
+// number already in use (not the newest record — creation order and ID order can differ)
 async function generateCustomerId(): Promise<string> {
-  const ids = await Customer.find({ customerId: /^ZMN-\d+$/ }).select('customerId -_id').lean() as { customerId: string }[];
-  const top = ids.reduce((max, c) => Math.max(max, parseInt(c.customerId.slice(4), 10) || 0), 0);
-  return `ZMN-${String(top + 1).padStart(5, '0')}`;
+  const n = await nextNumber('customerId', async () => {
+    const ids = await Customer.find({ customerId: /^ZMN-\d+$/ }).select('customerId -_id').lean() as { customerId: string }[];
+    return ids.reduce((max, c) => Math.max(max, parseInt(c.customerId.slice(4), 10) || 0), 0);
+  });
+  return `ZMN-${String(n).padStart(5, '0')}`;
 }
 
 /**
@@ -79,6 +84,7 @@ async function callFlexCubeService(customerData: any, settings: any): Promise<{
       motherMaidenName: customerData.motherMaidenName || '',
       taxIdentity: customerData.taxIdentity || customerData.tin || '',
       maritalStatus: customerData.maritalStatus || 'S',
+      nationality: customerData.nationality || '',
       uin: customerData.uin || '',
       region: customerData.region || customerData.address1 || '',
       zone: customerData.zone || customerData.address2 || '',
@@ -130,7 +136,6 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    console.log('bodyyy',body)
 
     // Validate required fields
     const requiredFields = ['fullName', 'phone', 'accountType', 'branch', 'faceMatchScore'];
@@ -269,6 +274,7 @@ export async function POST(request: Request) {
         try {
           const res = await fetch(`${FAYDA_BACKEND_URL}/api/flexcube/customer-branch`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cif: existingCif }),
+            signal: AbortSignal.timeout(15000),
           });
           const r = await res.json().catch(() => ({}));
           if (res.status === 409 && r.restricted) {
@@ -302,6 +308,23 @@ export async function POST(request: Request) {
     const existingApp = body.uin
       ? await Customer.findOne({ uin: body.uin, status: { $in: ['returned', 'rejected'] } }).sort({ createdAt: -1 })
       : null;
+
+    // Foreign national (Fayda nationality other than Ethiopia, any case): a passport and either a
+    // work permit or an Origin ID, uploaded before submitting. KYC reviews them (never auto-approved).
+    const nationality = String(body.nationality || '').trim().slice(0, 60);
+    const foreignNational = isForeignNational(nationality);
+    let foreignDocuments: ForeignDocument[] | undefined;
+    let newDocumentFileIds: string[] = [];
+    if (foreignNational) {
+      const checked = await checkForeignDocuments(body.foreignDocuments, existingApp?.customerId);
+      if ('error' in checked) {
+        return NextResponse.json({
+          success: false, error: checked.error, code: 'FOREIGN_DOCUMENTS', fileId: checked.fileId,
+        }, { status: 400 });
+      }
+      foreignDocuments = checked.documents;
+      newDocumentFileIds = checked.newFileIds;
+    }
 
     // Generate customer ID (reuse the existing one when amending a returned/rejected application)
     let customerId = existingApp ? existingApp.customerId : await generateCustomerId();
@@ -370,6 +393,10 @@ export async function POST(request: Request) {
       // Existing customers never auto-approve: KYC must confirm the CIF belongs to the applicant.
       status = 'pending';
       workflowDecision = `Sent to manual review: existing customer (CIF ${existingCif}) — KYC must confirm the CIF belongs to the applicant before the account is opened`;
+    } else if (foreignNational) {
+      // Foreign nationals never auto-approve: KYC checks the passport and work permit / Origin ID
+      status = 'pending';
+      workflowDecision = `Sent to manual review: foreign national (${nationality}) — KYC must check the passport and the work permit or Origin ID`;
     } else if (!isMobileApp) {
       // NON-MOBILE CHANNELS: Always manual review regardless of workflow settings
       status = 'pending';
@@ -478,7 +505,8 @@ export async function POST(request: Request) {
       politicallyExposedPerson: body.politicallyExposedPerson || 'NO',
       customerType: body.customerType || 'Individual',
       idType: body.idType || 'National ID',
-      nationality: body.nationality || 'ETHIOPIA',
+      nationality: foreignNational ? nationality : 'ETHIOPIA',
+      foreignDocuments,
       // Maker / Checker tracking — maker = who submitted the application
       maker: body.channel === 'web' ? 'WEB_USER' : body.channel === 'mobile_app' ? 'MOBILE_USER' : (body.channel || 'UNKNOWN').toUpperCase(),
       makerTimestamp: new Date(),
@@ -626,12 +654,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Log estimated total size
-    const estimatedSize = JSON.stringify(customerData).length;
-    console.log(`Estimated document size: ${(estimatedSize / 1_000_000).toFixed(2)} MB`);
-    if (estimatedSize > 15_000_000) {
-      console.log('⚠️ WARNING: Document near MongoDB 16MB limit!');
-    }
     console.log('=== END DEBUG ===');
 
     let customer;
@@ -662,6 +684,9 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    // The passport and work permit / Origin ID uploads now belong to the application
+    await claimForeignDocuments(newDocumentFileIds, customer.customerId);
 
     // Auto-approved with a real account: No-Debit as for a KYC approval (product setting)
     if (status === 'auto_approved' && accountNumber && settings.flexcubeEnabled) {
@@ -735,7 +760,7 @@ export async function POST(request: Request) {
                 { customerNumber: referrerCustNo },
                 { cifNumber: referrerCustNo },
               ],
-            });
+            }).select('customerId referralCode').lean() as any;
             if (referrerCustomer?.referralCode) {
               // The referrer was referred — find their Referral doc
               referrerAsReferee = await Referral.findOne({

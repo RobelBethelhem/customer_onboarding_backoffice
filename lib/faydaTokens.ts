@@ -56,6 +56,7 @@ export async function readEkycToken(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ekycToken }),
+      signal: AbortSignal.timeout(15000),
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.message || `HTTP ${res.status}`);
@@ -87,6 +88,7 @@ export async function verifyIdentity(
   try {
     const res = await fetch(`${FAYDA_BACKEND_URL}/api/fayda/verify-tokens`, {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ekycToken: input.ekycToken,

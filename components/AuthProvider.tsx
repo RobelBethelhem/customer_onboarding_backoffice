@@ -32,9 +32,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
+      .then(async res => {
+        const data = await res.json().catch(() => ({}));
         if (data.success) setUser(data.user);
+        // Session ended (deactivated, locked or signed out elsewhere): back to the sign-in page
+        else if (res.status === 401) {
+          await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+          router.replace('/login');
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));

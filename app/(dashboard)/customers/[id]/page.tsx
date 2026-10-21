@@ -7,7 +7,7 @@ import {
   ArrowLeft, User, MapPin, Briefcase, CreditCard, Calendar,
   Phone, Mail, CheckCircle2, XCircle,
   Camera, Eye, AlertTriangle, Download, Printer, Loader2, FileText, Video,
-  Shield, Megaphone, Lock, UserCheck, Smartphone
+  Shield, Megaphone, Lock, UserCheck, Smartphone, Globe
 } from 'lucide-react';
 import { serviceNamesFor } from '@/lib/services';
 import { currencyName } from '@/lib/currencies';
@@ -18,6 +18,8 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import FaceVerificationPanel from '@/components/FaceVerificationPanel';
+import ForeignDocumentsPanel from '@/components/ForeignDocumentsPanel';
+import { isForeignNational } from '@/lib/nationality';
 import { ensureDataUri, hasValidPhoto } from '@/lib/imageUtils';
 import { toast } from 'sonner';
 
@@ -623,6 +625,16 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
+      {/* Foreign national: KYC checks the passport and the work permit / Origin ID */}
+      {isForeignNational(customer.nationality) && (
+        <div className="p-4 rounded-xl flex items-start gap-3 border bg-sky-50 border-sky-200">
+          <Globe className="w-5 h-5 mt-0.5 flex-shrink-0 text-sky-600" />
+          <p className="font-medium text-sky-900">
+            Foreign national ({customer.nationality}) — check the passport and the {customer.foreignDocuments?.some(d => d.type === 'origin_id') ? 'Origin ID' : 'work permit'} under Foreign National Documents before approving
+          </p>
+        </div>
+      )}
+
       {/* Existing customer — approval opens a new account under the CIF they already have */}
       {customer.isExistingCustomer && (
         <div className={`p-4 rounded-xl flex items-start gap-3 border ${cifNeedsAttention ? 'bg-amber-50 border-amber-200' : 'bg-sky-50 border-sky-200'}`}>
@@ -944,6 +956,15 @@ export default function CustomerDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Foreign national: passport and work permit / Origin ID */}
+          {(isForeignNational(customer.nationality) || (customer.foreignDocuments?.length ?? 0) > 0) && (
+            <ForeignDocumentsPanel
+              nationality={customer.nationality || ''}
+              documents={customer.foreignDocuments || []}
+              canView={['admin', 'kyc', 'senior_approver'].includes(user?.role || '')}
+            />
+          )}
 
           {/* Scanned Documents */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">

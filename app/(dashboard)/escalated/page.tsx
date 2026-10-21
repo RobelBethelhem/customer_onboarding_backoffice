@@ -3,12 +3,15 @@
 import { useState, useEffect } from 'react';
 import { ShieldAlert, Search, Eye, Loader2, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
+import LoadMore from '@/components/LoadMore';
 import { fetchCustomers, Customer, getStatusColor, getStatusLabel, formatDate } from '@/lib/api';
 import { ensureDataUri } from '@/lib/imageUtils';
 
 export default function EscalatedPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [total, setTotal] = useState(0); // in the list at the bank (100 are loaded at a time)
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,11 +24,28 @@ export default function EscalatedPage() {
       const response = await fetchCustomers({ status: 'escalated' });
       if (response.success) {
         setCustomers(response.data);
+        setTotal(response.total);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // The next 100 of the list
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const response = await fetchCustomers({ status: 'escalated', skip: customers.length });
+      if (response.success) {
+        setCustomers(prev => [...prev, ...response.data.filter(c => !prev.some(p => p.customerId === c.customerId))]);
+        setTotal(response.total);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -151,6 +171,8 @@ export default function EscalatedPage() {
           </div>
         )}
       </div>
+
+      <LoadMore shown={customers.length} total={total} loading={loadingMore} onClick={loadMore} />
     </div>
   );
 }

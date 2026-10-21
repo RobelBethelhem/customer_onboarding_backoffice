@@ -37,7 +37,7 @@ export async function sendSMS(phone: string, message: string): Promise<boolean> 
     const url = `${SMS_GATEWAY}?username=${SMS_USERNAME}&password=${encodeURIComponent(SMS_PASSWORD)}&to=${to}&from=${SMS_FROM}&coding=8&content=${encodedContent}`;
 
     console.log(`[SMS] Sending to ${to}...`);
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) }); // a hung gateway must not hold requests
 
    
 

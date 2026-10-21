@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const c = await Customer.findOne({ customerId: applicationId })
       .select('customerId status uin fcn returnReason rejectionReason branchCode conventionalBranchCode accountTypeId accountClassCode tierName currency '
         + 'email taxIdentity annualIncome occupation otherOccupation industry otherIndustry wealthSource otherWealthSource '
-        + 'motherMaidenName maritalStatus promotionType isExistingCustomer existingCif existingAccountNumber requestedServices requestedServiceDetails')
+        + 'motherMaidenName maritalStatus promotionType isExistingCustomer existingCif existingAccountNumber requestedServices requestedServiceDetails foreignDocuments')
       .lean() as any;
     // Same answer whether the ID is unknown or someone else's
     const ids = [me.ekyc.fan, me.ekyc.uin].filter(Boolean).map(String);
@@ -67,6 +67,11 @@ export async function POST(request: Request) {
           serviceTermsAccepted: (c.requestedServiceDetails || [])
             .filter((s: any) => s.termsAcceptedVersion > 0)
             .map((s: any) => ({ id: s.id, version: s.termsAcceptedVersion, acceptedAt: s.termsAcceptedAt })),
+          // Foreign national's passport and work permit / Origin ID the application already holds:
+          // sent again without a key, they stay; new uploads replace them
+          foreignDocuments: (c.foreignDocuments || []).map((d: any) => ({
+            type: d.type, fileId: d.fileId, fileName: d.fileName, mimeType: d.mimeType, size: d.size,
+          })),
         },
       },
     });

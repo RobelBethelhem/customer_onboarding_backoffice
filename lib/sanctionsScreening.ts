@@ -1,36 +1,41 @@
 import SanctionEntry from '@/lib/models/SanctionEntry';
 import SanctionSource from '@/lib/models/SanctionSource';
 
-// NOTE: This mirrors the matching logic used by /api/screening/check so that onboarding
-// can run an authoritative server-side PEP/sanctions check at submission time. It is kept
-// self-contained to avoid altering the verified screening route. Keep the two in sync if
-// the scoring rules change.
+// PEP/sanctions screening: the web app's check after the Fayda OTP (/api/screening/check) and the
+// authoritative check when an application is submitted both use this.
 
+// Edit distance with two rows (the same result as the full table, without allocating it per pair)
 function levenshteinDistance(str1: string, str2: string): number {
-  const m = str1.length;
   const n = str2.length;
-  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++) {
+  let prev = new Array<number>(n + 1);
+  let curr = new Array<number>(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= str1.length; i++) {
+    curr[0] = i;
     for (let j = 1; j <= n; j++) {
-      if (str1[i - 1] === str2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1];
-      } else {
-        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-      }
+      curr[j] = str1[i - 1] === str2[j - 1] ? prev[j - 1] : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1]);
     }
+    [prev, curr] = [curr, prev];
   }
-  return dp[m][n];
+  return prev[n];
 }
 
 export function calculateSimilarity(str1: string, str2: string): number {
+  return similarityIfAtLeast(str1, str2, 0);
+}
+
+/**
+ * calculateSimilarity, or 0 when the lengths alone show it is below `min` (the edit distance is at
+ * least the difference in length) — screening only needs scores that can reach its thresholds.
+ */
+function similarityIfAtLeast(str1: string, str2: string, min: number): number {
   if (!str1 || !str2) return 0;
   const s1 = str1.toLowerCase().trim();
   const s2 = str2.toLowerCase().trim();
   if (s1 === s2) return 100;
   const maxLen = Math.max(s1.length, s2.length);
   if (maxLen === 0) return 100;
+  if (min > 0 && Math.round((1 - Math.abs(s1.length - s2.length) / maxLen) * 100) < min) return 0;
   const distance = levenshteinDistance(s1, s2);
   return Math.round((1 - distance / maxLen) * 100);
 }
@@ -71,6 +76,7 @@ export interface ScreenResult {
 }
 
 const FULL_NAME_THRESHOLD = 80;
+const DOB_NAME_THRESHOLD = 70; // with the same date of birth
 
 /** The active screening lists (sanctions, PEP, NBE …) and each source's risk score */
 export interface ScreeningLists {
@@ -78,9 +84,33 @@ export interface ScreeningLists {
   sourceRiskMap: Record<string, number>;
 }
 
+// The lists stay in memory between checks: reloaded after a change made here (invalidate…) and at
+// least every minute (changes made by another server process)
+const LISTS_MAX_AGE_MS = 60 * 1000;
+let cachedLists: { lists: Promise<ScreeningLists>; loadedAt: number } | null = null;
+
+/** The sanctions / PEP lists changed (entry added, edited, deleted, imported, list risk score) */
+export function invalidateScreeningLists() {
+  cachedLists = null;
+}
+
 export async function loadScreeningLists(): Promise<ScreeningLists> {
-  const sanctions = await SanctionEntry.find({ status: 'ACTIVE', isDeleted: false }).lean();
-  const sources = await SanctionSource.find({}).lean();
+  if (!cachedLists || Date.now() - cachedLists.loadedAt > LISTS_MAX_AGE_MS) {
+    const lists = readScreeningLists();
+    cachedLists = { lists, loadedAt: Date.now() };
+    lists.catch(() => { if (cachedLists?.lists === lists) cachedLists = null; }); // a failed load is not kept
+  }
+  return cachedLists.lists;
+}
+
+async function readScreeningLists(): Promise<ScreeningLists> {
+  const [sanctions, sources] = await Promise.all([
+    // only what the matching uses
+    SanctionEntry.find({ status: 'ACTIVE', isDeleted: false })
+      .select('entryId fullName firstName middleName lastName aliases.fullName dateOfBirth sanctionType sourceId riskScore reason')
+      .lean(),
+    SanctionSource.find({}).select('sourceId riskScore').lean(),
+  ]);
   const sourceRiskMap: Record<string, number> = {};
   for (const s of sources as any[]) {
     sourceRiskMap[s.sourceId] = typeof s.riskScore === 'number' ? s.riskScore : 50;
@@ -101,45 +131,49 @@ export function screenAgainst(lists: ScreeningLists, input: ScreenInput): Screen
   const customerFullName = (input.fullName || `${firstName} ${middleName} ${lastName}`).replace(/\s+/g, ' ').trim();
   const { sanctions, sourceRiskMap } = lists;
 
+  // The customer's date of birth, once
+  let customerDob = '';
+  if (dateOfBirth) {
+    try { customerDob = new Date(dateOfBirth).toISOString().split('T')[0]; } catch {}
+  }
+
   const matches: any[] = [];
   for (const entry of sanctions) {
-    const matchedFields: string[] = [];
-    const fullNameScore = calculateSimilarity(customerFullName, entry.fullName);
-    const firstNameScore = calculateSimilarity(firstName, entry.firstName);
-    const lastNameScore = calculateSimilarity(lastName, entry.lastName);
-    let middleNameScore = 0;
-    if (middleName && entry.middleName) middleNameScore = calculateSimilarity(middleName, entry.middleName);
-
+    // A match needs the whole name (or an alias) to score at least 70 (80 without a date of
+    // birth match): lower scores are never computed in full
+    const fullNameScore = similarityIfAtLeast(customerFullName, entry.fullName, DOB_NAME_THRESHOLD);
     let bestAliasScore = 0;
     if (entry.aliases && entry.aliases.length > 0) {
       for (const alias of entry.aliases) {
         if (alias.fullName) {
-          const aliasScore = calculateSimilarity(customerFullName, alias.fullName);
+          const aliasScore = similarityIfAtLeast(customerFullName, alias.fullName, DOB_NAME_THRESHOLD);
           if (aliasScore > bestAliasScore) bestAliasScore = aliasScore;
         }
       }
     }
-
     const effectiveScore = Math.max(fullNameScore, bestAliasScore);
-    if (fullNameScore >= FULL_NAME_THRESHOLD) matchedFields.push('fullName');
-    if (bestAliasScore >= FULL_NAME_THRESHOLD) matchedFields.push('alias');
-    if (firstNameScore >= 80) matchedFields.push('firstName');
-    if (lastNameScore >= 80) matchedFields.push('lastName');
-    if (middleNameScore >= 80) matchedFields.push('middleName');
+    if (effectiveScore < DOB_NAME_THRESHOLD) continue;
 
     let dobMatch = false;
-    if (dateOfBirth && entry.dateOfBirth) {
+    if (customerDob && entry.dateOfBirth) {
       try {
-        const customerDob = new Date(dateOfBirth).toISOString().split('T')[0];
-        const entryDob = new Date(entry.dateOfBirth).toISOString().split('T')[0];
-        if (customerDob === entryDob) { matchedFields.push('dateOfBirth'); dobMatch = true; }
+        dobMatch = new Date(entry.dateOfBirth).toISOString().split('T')[0] === customerDob;
       } catch {}
     }
 
     const isFullNameMatch = effectiveScore >= FULL_NAME_THRESHOLD;
-    const isDobCorroborated = dobMatch && effectiveScore >= 70;
+    const isDobCorroborated = dobMatch && effectiveScore >= DOB_NAME_THRESHOLD;
 
     if (isFullNameMatch || isDobCorroborated) {
+      // Which parts of the name matched — for the reviewer
+      const matchedFields: string[] = [];
+      if (fullNameScore >= FULL_NAME_THRESHOLD) matchedFields.push('fullName');
+      if (bestAliasScore >= FULL_NAME_THRESHOLD) matchedFields.push('alias');
+      if (similarityIfAtLeast(firstName, entry.firstName, 80) >= 80) matchedFields.push('firstName');
+      if (similarityIfAtLeast(lastName, entry.lastName, 80) >= 80) matchedFields.push('lastName');
+      if (middleName && entry.middleName && similarityIfAtLeast(middleName, entry.middleName, 80) >= 80) matchedFields.push('middleName');
+      if (dobMatch) matchedFields.push('dateOfBirth');
+
       matches.push({
         sanctionEntryId: entry._id.toString(),
         entryId: entry.entryId,

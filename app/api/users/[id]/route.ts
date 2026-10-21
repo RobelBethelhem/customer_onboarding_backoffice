@@ -5,6 +5,23 @@ import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { requireRole } from '@/lib/apiAuth';
 import { audit, fieldChanges } from '@/lib/audit';
 
+/**
+ * Why this change would leave the bank without an administrator (or the admin locked out of their
+ * own session): deactivating yourself, or deactivating / demoting the last active admin. '' = fine.
+ */
+async function adminGuard(request: NextRequest, user: any, change: { deactivate?: boolean; newRole?: string }): Promise<string> {
+  if (change.deactivate && String(user._id) === request.headers.get('x-user-id')) {
+    return 'You cannot deactivate your own account.';
+  }
+  const losesAdmin = user.role === 'admin' && user.isActive !== false &&
+    (change.deactivate || (change.newRole && change.newRole !== 'admin'));
+  if (losesAdmin) {
+    const otherAdmins = await User.countDocuments({ _id: { $ne: user._id }, role: 'admin', isActive: { $ne: false } });
+    if (!otherAdmins) return 'At least one active administrator is needed. Make another user an admin first.';
+  }
+  return '';
+}
+
 // PATCH /api/users/[id] - Update user (admin only)
 export async function PATCH(
   request: NextRequest,
@@ -25,6 +42,8 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
     const before = { name: user.name, phone: user.phone, role: user.role, branchCode: user.branchCode, isActive: user.isActive, isLocked: user.isLocked };
+    const refused = await adminGuard(request, user, { deactivate: isActive === false && user.isActive !== false, newRole: role });
+    if (refused) return NextResponse.json({ success: false, error: refused }, { status: 400 });
 
     if (name) user.name = name;
     if (typeof phone === 'string') user.phone = phone;
@@ -37,6 +56,8 @@ export async function PATCH(
 
     // Reactivating (or explicitly unlocking) clears the lockout so the user can log in again (F4)
     if (typeof isActive === 'boolean') {
+      // Deactivating ends the user's sessions (their sign-in token stops being accepted)
+      if (!isActive && user.isActive !== false) user.tokenVersion = (user.tokenVersion || 0) + 1;
       user.isActive = isActive;
       if (isActive) { user.isLocked = false; user.failedLoginAttempts = 0; user.lockedAt = undefined; }
     }
@@ -79,6 +100,7 @@ export async function PATCH(
         name: user.name,
         role: user.role,
         isActive: user.isActive,
+        isLocked: user.isLocked,
         lastLogin: user.lastLogin,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
@@ -107,6 +129,10 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
 
+    const refused = await adminGuard(request, user, { deactivate: user.isActive !== false });
+    if (refused) return NextResponse.json({ success: false, error: refused }, { status: 400 });
+
+    if (user.isActive !== false) user.tokenVersion = (user.tokenVersion || 0) + 1; // ends their sessions
     user.isActive = false;
     await user.save();
     await audit(request, {

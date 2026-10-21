@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Clock, Zap, CheckCircle2, XCircle, Users, Loader2, TrendingUp, PieChart, BarChart3, Activity } from 'lucide-react';
 import Link from 'next/link';
-import { fetchCustomers, fetchStats, Customer, getStatusColor, getStatusLabel, formatDate } from '@/lib/api';
+import { fetchCustomers, Customer, getStatusColor, getStatusLabel, formatDate } from '@/lib/api';
 import { ensureDataUri } from '@/lib/imageUtils';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart as RPieChart, Pie, Cell,
@@ -31,10 +31,9 @@ export default function Dashboard() {
   async function loadData() {
     try {
       setLoading(true);
-      const [customersRes, allCustomersRes, statsRes] = await Promise.all([
-        fetchCustomers({ limit: 5 }),
-        fetchCustomers({ limit: 1000 }), // Get all for analytics
-        fetchStats(),
+      const [customersRes, allCustomersRes] = await Promise.all([
+        fetchCustomers({ limit: 5, counts: true }),
+        fetchCustomers({ limit: 1000, fields: 'stats' }), // the latest 1000 for the charts (no photos)
       ]);
 
       if (customersRes.success) {

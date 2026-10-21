@@ -6,6 +6,8 @@ export const defaultAccountProducts = (): IAccountProduct[] =>
 
 /** The account product catalog (Account Products page), seeded with the defaults on first use */
 export async function getAccountProducts(): Promise<IAccountProduct[]> {
+  const saved = await AccountProductSettings.findById('default').select('products').lean() as any;
+  if (saved) return saved.products || [];
   const doc = await AccountProductSettings.findOneAndUpdate(
     { _id: 'default' },
     { $setOnInsert: { products: defaultAccountProducts(), updatedBy: 'system (default catalog)' } },

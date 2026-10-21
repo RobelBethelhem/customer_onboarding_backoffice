@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
           { customerNumber: customerNumber },
           { cifNumber: customerNumber },
         ],
-      });
+      }).select('customerId referralCode').lean() as any;
       if (referrerCustomer?.referralCode) {
         referrerAsReferee = await Referral.findOne({
           refereeCustomerId: referrerCustomer.customerId,

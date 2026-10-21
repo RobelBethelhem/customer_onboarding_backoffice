@@ -52,7 +52,8 @@ const emptyDocument = (): DocumentType => ({ id: '', name: '', description: '', 
  * Business Accounts tab of the Products & Services page (KYC officers, admin): the kinds of
  * organization that can apply, and the documents each one uploads (KYC procedure 2.3.2–2.3.6).
  */
-export default function CorporateCatalogManager() {
+/** readOnly: everyone but admin sees the catalog without being able to change it */
+export default function CorporateCatalogManager({ readOnly = false }: { readOnly?: boolean }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [rules, setRules] = useState<Rules>({ maxPeople: 10, maxFileMb: 5, signatureRequired: true, inviteValidDays: 14 });
   const [defaults, setDefaults] = useState<Category[]>([]);
@@ -139,7 +140,7 @@ export default function CorporateCatalogManager() {
   );
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={readOnly} className="space-y-5 min-w-0 border-0 p-0 m-0">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-sm text-gray-500">
           The kinds of organization that can open an account in the web app and the documents each one uploads.
@@ -147,6 +148,7 @@ export default function CorporateCatalogManager() {
           For each kind you can also choose which account types it can open.
           {meta.updatedAt && <> Last changed {new Date(meta.updatedAt).toLocaleString()}{meta.updatedBy ? ` by ${meta.updatedBy}` : ''}.</>}
         </p>
+        {!readOnly && (
         <div className="flex flex-wrap gap-2">
           {missingDefaults.length > 0 && (
             <button type="button" onClick={() => update([...categories, ...missingDefaults.map(d => JSON.parse(JSON.stringify(d)))])}
@@ -160,6 +162,7 @@ export default function CorporateCatalogManager() {
             <Plus className="w-4 h-4" /> Add category
           </button>
         </div>
+        )}
       </div>
 
       {message && (
@@ -193,7 +196,7 @@ export default function CorporateCatalogManager() {
       </div>
 
       {categories.map((c, ci) => {
-        const expanded = open.has(ci);
+        const expanded = readOnly || open.has(ci);
         const activeDocs = c.documents.filter(d => d.active).length;
         const rules = c.accounts || [];
         const setRules = (next: AccountRule[]) => setCategory(ci, { accounts: next });
@@ -386,6 +389,7 @@ export default function CorporateCatalogManager() {
         <div className="text-center text-gray-500 py-12 bg-white rounded-xl border">No categories — organizations cannot apply until at least one is added.</div>
       )}
 
+      {!readOnly && (
       <div className="sticky bottom-0 bg-white/95 backdrop-blur border rounded-xl shadow-sm px-4 py-3 flex items-center justify-end gap-3 z-30">
         {dirty && <span className="text-sm text-amber-700 mr-auto sm:mr-0">Unsaved changes</span>}
         {dirty && <button type="button" onClick={load} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Discard</button>}
@@ -394,6 +398,7 @@ export default function CorporateCatalogManager() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save
         </button>
       </div>
-    </div>
+      )}
+    </fieldset>
   );
 }

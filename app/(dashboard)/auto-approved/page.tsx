@@ -3,12 +3,15 @@
 import { useState, useEffect } from 'react';
 import { Zap, CheckCircle2, Search, Filter, Eye, Download, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import LoadMore from '@/components/LoadMore';
 import { fetchCustomers, Customer, getStatusColor, getStatusLabel, formatDate } from '@/lib/api';
 
 export default function AutoApprovedPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [total, setTotal] = useState(0); // in the list at the bank (100 are loaded at a time)
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,11 +24,28 @@ export default function AutoApprovedPage() {
       const response = await fetchCustomers({ status: 'auto_approved' });
       if (response.success) {
         setCustomers(response.data);
+        setTotal(response.total);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // The next 100 of the list
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const response = await fetchCustomers({ status: 'auto_approved', skip: customers.length });
+      if (response.success) {
+        setCustomers(prev => [...prev, ...response.data.filter(c => !prev.some(p => p.customerId === c.customerId))]);
+        setTotal(response.total);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -230,6 +250,8 @@ export default function AutoApprovedPage() {
           </div>
         )}
       </div>
+
+      <LoadMore shown={customers.length} total={total} loading={loadingMore} onClick={loadMore} />
     </div>
   );
 }

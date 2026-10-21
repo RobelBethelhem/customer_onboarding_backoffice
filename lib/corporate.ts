@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import CorporateFile, { ICorporateFile } from '@/lib/models/CorporateFile';
+import { nextNumber } from '@/lib/models/Counter';
 import { screenCustomer, screenAgainst, loadScreeningLists, ScreeningLists, ScreenResult, ScreenInput } from '@/lib/sanctionsScreening';
 import { sendSMS } from '@/lib/sms';
 import CorporateApplication, {
@@ -39,11 +40,13 @@ export function normalizeMobile(phone: unknown): string {
 
 export const maskPhone = (phone: string) => (phone && phone.length >= 6 ? `${phone.slice(0, 2)}******${phone.slice(-2)}` : phone);
 
-/** Next application number: one above the highest in use (ZMC-00001 …) */
+/** Next application number (ZMC-00001 …) from a counter; the first time above the highest in use */
 export async function nextCorporateId(): Promise<string> {
-  const ids = await CorporateApplication.find({ applicationId: /^ZMC-\d+$/ }).select('applicationId -_id').lean() as { applicationId: string }[];
-  const top = ids.reduce((max, a) => Math.max(max, parseInt(a.applicationId.slice(4), 10) || 0), 0);
-  return `ZMC-${String(top + 1).padStart(5, '0')}`;
+  const n = await nextNumber('corporateApplicationId', async () => {
+    const ids = await CorporateApplication.find({ applicationId: /^ZMC-\d+$/ }).select('applicationId -_id').lean() as { applicationId: string }[];
+    return ids.reduce((max, a) => Math.max(max, parseInt(a.applicationId.slice(4), 10) || 0), 0);
+  });
+  return `ZMC-${String(n).padStart(5, '0')}`;
 }
 
 export const verificationCounts = (app: Pick<ICorporateApplication, 'people'>) => ({

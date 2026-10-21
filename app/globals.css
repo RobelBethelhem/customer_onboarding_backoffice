@@ -62,6 +62,20 @@ body {
   @apply bg-blue-100 text-blue-800;
 }
 
+/* View-only forms (e.g. Products & Services for KYC): fields look read-only, nothing looks clickable */
+fieldset:disabled input:not([type='checkbox']),
+fieldset:disabled select,
+fieldset:disabled textarea {
+  background-color: #f9fafb;
+  color: #374151;
+}
+fieldset:disabled button,
+fieldset:disabled input,
+fieldset:disabled select,
+fieldset:disabled label {
+  cursor: not-allowed;
+}
+
 /* Print styles */
 @media print {
   body {

@@ -37,6 +37,11 @@ export async function GET(request: NextRequest) {
       query.branchCode = { $in: await branchCodesFor(branch) }; // the branch and its IFB branch
     }
 
+    // Sidebar badge: just how many
+    if (request.nextUrl.searchParams.get('countOnly') === '1') {
+      return NextResponse.json({ success: true, data: [], total: await Customer.countDocuments(query) });
+    }
+
     const customers = await Customer.find(query).select(FIELDS).sort({ approvedAt: -1 }).limit(500).lean();
 
     return NextResponse.json({ success: true, data: customers });

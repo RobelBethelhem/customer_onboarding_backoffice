@@ -75,7 +75,8 @@ function OrderButtons({ onUp, onDown, upDisabled, downDisabled }: {
 }
 
 /** Account Products tab of the Products & Services page (KYC officers, admin) */
-export default function AccountProductsManager() {
+/** readOnly: everyone but admin sees the catalog without being able to change it */
+export default function AccountProductsManager({ readOnly = false }: { readOnly?: boolean }) {
   const [products, setProducts] = useState<AccountProduct[]>([]);
   const [defaults, setDefaults] = useState<AccountProduct[]>([]);
   const [meta, setMeta] = useState<{ updatedBy?: string; updatedAt?: string }>({});
@@ -156,7 +157,7 @@ export default function AccountProductsManager() {
   const input = 'w-full px-2 py-1.5 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500';
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={readOnly} className="space-y-5 min-w-0 border-0 p-0 m-0">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <p className="text-sm text-gray-500">
@@ -170,6 +171,7 @@ export default function AccountProductsManager() {
             )}
           </p>
         </div>
+        {!readOnly && (
         <div className="flex flex-wrap gap-2">
           {missingDefaults.length > 0 && (
             <button type="button" onClick={restoreDefaults}
@@ -183,6 +185,7 @@ export default function AccountProductsManager() {
             <Plus className="w-4 h-4" /> Add product
           </button>
         </div>
+        )}
       </div>
 
       {message && (
@@ -360,6 +363,7 @@ export default function AccountProductsManager() {
       )}
 
       {/* Save bar */}
+      {!readOnly && (
       <div className="sticky bottom-0 bg-white/95 backdrop-blur border rounded-xl shadow-sm px-4 py-3 flex items-center justify-end gap-3 z-30">
         {dirty && <span className="text-sm text-amber-700 mr-auto sm:mr-0">Unsaved changes</span>}
         {dirty && (
@@ -372,6 +376,7 @@ export default function AccountProductsManager() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save
         </button>
       </div>
-    </div>
+      )}
+    </fieldset>
   );
 }

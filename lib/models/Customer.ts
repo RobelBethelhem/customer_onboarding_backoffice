@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { FOREIGN_DOCUMENT_TYPES, ForeignDocument } from '@/lib/foreignDocumentTypes';
 
 export interface IVerificationPhotos {
   faceCenter?: string;
@@ -162,6 +163,9 @@ export interface ICustomer extends Document {
   // with the Fayda photo (faceMatchScore holds the similarity)
   faceVerification?: Record<string, any>;
   livenessFrames?: ILivenessFrame[];
+  // Foreign national (Fayda nationality other than Ethiopia): passport and a work permit or Origin
+  // ID — the files themselves are in the file store (CorporateFile, applicationId = customerId)
+  foreignDocuments?: ForeignDocument[];
 }
 
 // Default placeholder photo
@@ -209,6 +213,15 @@ const RequestedServiceDetailSchema = new Schema<IRequestedServiceDetail>({
   termsVersion: { type: Number, default: 0 },
   termsAcceptedVersion: { type: Number, default: 0 },
   termsAcceptedAt: { type: Date },
+}, { _id: false });
+
+const ForeignDocumentSchema = new Schema<ForeignDocument>({
+  type: { type: String, enum: Object.keys(FOREIGN_DOCUMENT_TYPES), required: true },
+  fileId: { type: String, required: true },
+  fileName: { type: String, default: '' },
+  mimeType: { type: String, default: '' },
+  size: { type: Number, default: 0 },
+  uploadedAt: { type: Date },
 }, { _id: false });
 
 const LivenessFrameSchema = new Schema<ILivenessFrame>({
@@ -336,6 +349,7 @@ const CustomerSchema = new Schema<ICustomer>({
   requestedServiceDetails: { type: [RequestedServiceDetailSchema], default: [] },
   faceVerification: { type: Schema.Types.Mixed },
   livenessFrames: { type: [LivenessFrameSchema], default: [] },
+  foreignDocuments: { type: [ForeignDocumentSchema], default: undefined },
 }, {
   timestamps: true,
 });
@@ -347,5 +361,9 @@ CustomerSchema.index({ branch: 1 });
 CustomerSchema.index({ uin: 1 });
 CustomerSchema.index({ channel: 1 });
 CustomerSchema.index({ servicesStatus: 1, branchCode: 1 }); // Personal Banker service-request queue
+CustomerSchema.index({ status: 1, createdAt: -1 });         // review queues: a status, newest first
+CustomerSchema.index({ branchCode: 1, status: 1, createdAt: -1 }); // branch users: their branch's accounts
+CustomerSchema.index({ customerNumber: 1 }, { sparse: true }); // referrals: customer by CIF
+CustomerSchema.index({ cifNumber: 1 }, { sparse: true });
 
 export default mongoose.models.Customer || mongoose.model<ICustomer>('Customer', CustomerSchema);

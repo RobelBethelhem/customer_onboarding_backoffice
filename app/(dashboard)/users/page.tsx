@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import {
   Users, Plus, Loader2, Shield, Eye, EyeOff,
-  CheckCircle2, XCircle, Pencil, UserX, UserCheck, Unlock,
+  CheckCircle2, XCircle, Pencil, UserX, UserCheck, Unlock, Search, ChevronLeft, ChevronRight, AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -20,9 +20,34 @@ interface UserRecord {
   createdAt: string;
 }
 
+type StatusFilter = 'all' | 'active' | 'inactive' | 'locked';
+const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
+  { id: 'all', label: 'All' }, { id: 'active', label: 'Active' }, { id: 'inactive', label: 'Inactive' }, { id: 'locked', label: 'Locked' },
+];
+const ROLE_FILTERS: { id: string; label: string }[] = [
+  { id: '', label: 'All roles' }, { id: 'admin', label: 'Admin' }, { id: 'kyc', label: 'KYC' },
+  { id: 'senior_approver', label: 'Senior Approver' }, { id: 'sanction_uploader', label: 'Sanctions Uploader' },
+  { id: 'marketing', label: 'Marketing' }, { id: 'branch', label: 'Branch' }, { id: 'personal_banker', label: 'Personal Banker' },
+  { id: 'auditor', label: 'Auditor' },
+];
+
 export default function UserManagementPage() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  // Filters and paging (server side)
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
+  const [counts, setCounts] = useState<Record<StatusFilter, number>>({ all: 0, active: 0, inactive: 0, locked: 0 });
+  const [listError, setListError] = useState('');
+  // Activate / deactivate: the user waiting for confirmation, and the request in flight
+  const [confirmUser, setConfirmUser] = useState<UserRecord | null>(null);
+  const [statusBusy, setStatusBusy] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [formData, setFormData] = useState({
@@ -38,19 +63,38 @@ export default function UserManagementPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Search as you type, once typing pauses
+  useEffect(() => {
+    const t = setTimeout(() => { setQuery(search.trim()); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   useEffect(() => {
     fetchUsers();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, statusFilter, roleFilter, page, pageSize]);
 
   async function fetchUsers() {
     try {
-      const res = await fetch('/api/users');
+      const params = new URLSearchParams({ page: String(page), limit: String(pageSize), status: statusFilter });
+      if (query) params.set('search', query);
+      if (roleFilter) params.set('role', roleFilter);
+      const res = await fetch(`/api/users?${params}`);
       const data = await res.json();
       if (data.success) {
         setUsers(data.users);
+        setTotal(data.total);
+        setPages(data.pages);
+        if (data.counts) setCounts(data.counts);
+        setListError('');
+        // The page emptied (e.g. its last user changed status): show the last page that has users
+        if (data.users.length === 0 && page > 1 && page > data.pages) setPage(data.pages);
+      } else {
+        setListError(data.error || 'Failed to load users');
       }
     } catch (err) {
       console.error('Failed to fetch users:', err);
+      setListError('Failed to load users');
     } finally {
       setLoading(false);
     }
@@ -125,20 +169,25 @@ export default function UserManagementPage() {
     }
   }
 
-  async function toggleUserStatus(user: UserRecord) {
+  // Activate right away; deactivate after the admin confirms (the user is signed out)
+  async function setUserActive(user: UserRecord, isActive: boolean) {
+    setStatusBusy(user._id);
+    setListError('');
     try {
-      if (user.isActive) {
-        await fetch(`/api/users/${user._id}`, { method: 'DELETE' });
-      } else {
-        await fetch(`/api/users/${user._id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isActive: true }),
-        });
-      }
+      const res = await fetch(`/api/users/${user._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'Could not change the user');
+      setSuccessMsg(isActive ? `${user.name} is active and can sign in again` : `${user.name} is deactivated and signed out`);
       fetchUsers();
     } catch (err) {
-      console.error('Failed to toggle user status:', err);
+      setListError((err as Error).message);
+    } finally {
+      setStatusBusy('');
+      setConfirmUser(null);
     }
   }
 
@@ -218,6 +267,78 @@ export default function UserManagementPage() {
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4" />
           {successMsg}
+        </div>
+      )}
+
+      {listError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
+          {listError}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="mb-4 flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="flex p-1 bg-gray-100 rounded-lg w-fit">
+          {STATUS_FILTERS.map(f => (
+            <button
+              key={f.id}
+              onClick={() => { setStatusFilter(f.id); setPage(1); }}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                statusFilter === f.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {f.label} <span className="text-xs text-gray-400">{counts[f.id] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email, phone or branch code..."
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <select
+          value={roleFilter}
+          onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {ROLE_FILTERS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+        </select>
+      </div>
+
+      {/* Deactivate: confirm first */}
+      {confirmUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => !statusBusy && setConfirmUser(null)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <UserX className="w-5 h-5 text-red-600" /> Deactivate {confirmUser.name}?
+            </h2>
+            <p className="text-sm text-gray-600 mt-2">
+              {confirmUser.email} is signed out and cannot sign in until you activate the account again. Their work and
+              the audit trail are kept.
+            </p>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setConfirmUser(null)}
+                disabled={!!statusBusy}
+                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setUserActive(confirmUser, false)}
+                disabled={!!statusBusy}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {statusBusy ? <Loader2 size={16} className="animate-spin" /> : <UserX size={16} />} Deactivate
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -304,7 +425,7 @@ export default function UserManagementPage() {
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900"
                 >
                   <option value="admin">Admin - Full access</option>
-                  <option value="kyc">KYC - All except referrals & user management</option>
+                  <option value="kyc">KYC - Reviews and approvals; Products &amp; Services and Settings view only</option>
                   <option value="senior_approver">Senior Approver - Second-level (PEP) approval</option>
                   <option value="sanction_uploader">PEP &amp; Sanctions Uploader - Manage the sanctions list only</option>
                   <option value="marketing">Marketing - Referral program only</option>
@@ -430,17 +551,25 @@ export default function UserManagementPage() {
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={() => toggleUserStatus(user)}
-                      className={`p-2 rounded-lg transition-colors ${
-                        user.isActive
-                          ? 'text-gray-400 hover:text-red-600 hover:bg-red-50'
-                          : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
-                      }`}
-                      title={user.isActive ? 'Deactivate user' : 'Activate user'}
-                    >
-                      {user.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                    </button>
+                    {user.isActive ? (
+                      <button
+                        onClick={() => setConfirmUser(user)}
+                        disabled={statusBusy === user._id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        title="Deactivate: the user is signed out and cannot sign in"
+                      >
+                        <UserX className="w-3.5 h-3.5" /> Deactivate
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setUserActive(user, true)}
+                        disabled={statusBusy === user._id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-200 text-green-700 hover:bg-green-50 transition-colors disabled:opacity-50"
+                        title="Activate: the user can sign in again"
+                      >
+                        {statusBusy === user._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />} Activate
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -454,6 +583,42 @@ export default function UserManagementPage() {
             <p>No users found</p>
           </div>
         )}
+
+        {/* Paging */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-3 border-t border-gray-200 bg-gray-50 text-sm text-gray-600">
+          <span>
+            {total === 0 ? 'No users' : `Showing ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
+          </span>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2">
+              Per page
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                className="px-2 py-1 border border-gray-200 rounded-md bg-white"
+              >
+                {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="p-1.5 border border-gray-200 rounded-md bg-white hover:bg-gray-100 disabled:opacity-40"
+              title="Previous page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span>Page {page} of {pages}</span>
+            <button
+              onClick={() => setPage(p => Math.min(pages, p + 1))}
+              disabled={page >= pages}
+              className="p-1.5 border border-gray-200 rounded-md bg-white hover:bg-gray-100 disabled:opacity-40"
+              title="Next page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Role Info */}
@@ -469,7 +634,7 @@ export default function UserManagementPage() {
           </div>
           <div>
             <p className="font-medium text-blue-700 mb-1">KYC Officer</p>
-            <p className="text-gray-600">Customer onboarding, screening, approvals. No referral or user management</p>
+            <p className="text-gray-600">Customer onboarding, screening, approvals. Products &amp; Services and Settings view only; no referral or user management</p>
           </div>
           <div>
             <p className="font-medium text-green-700 mb-1">Marketing</p>
