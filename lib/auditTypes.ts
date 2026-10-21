@@ -31,6 +31,6 @@ export type AuditStatus = typeof AUDIT_STATUSES[number];
 
 // Who can appear as the actor: dashboard roles plus applicants and the system itself
 export const AUDIT_ROLES = [
-  'admin', 'kyc', 'senior_approver', 'branch', 'personal_banker', 'marketing', 'sanction_uploader',
+  'admin', 'kyc', 'senior_approver', 'branch', 'personal_banker', 'marketing', 'sanction_uploader', 'auditor',
   'applicant', 'system',
 ] as const;

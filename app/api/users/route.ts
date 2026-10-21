@@ -206,6 +206,7 @@ export async function POST(request: NextRequest) {
       'senior_approver',
       'sanction_uploader',
       'personal_banker',
+      'auditor',
     ];
 
     if (!allowedRoles.includes(role)) {

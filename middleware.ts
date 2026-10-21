@@ -58,6 +58,11 @@ function checkPageAccess(role: string, path: string): boolean {
     return false;
   }
 
+  // Auditor: reads the Audit Log, nothing else
+  if (role === 'auditor') {
+    return path === '/audit-logs' || path.startsWith('/audit-logs/');
+  }
+
   if (role === 'kyc' || role === 'senior_approver') {
     if (path === '/referrals' || path.startsWith('/referrals/')) return false;
     if (path === '/users' || path.startsWith('/users/')) return false;
@@ -98,6 +103,10 @@ function checkApiAccess(role: string, method: string, pathname: string): boolean
   if (role === 'sanction_uploader') {
     if (pathname.startsWith('/api/sanctions')) return true;
     return false;
+  }
+
+  if (role === 'auditor') {
+    return pathname.startsWith('/api/audit-logs') && method === 'GET';
   }
 
   if (role === 'kyc' || role === 'senior_approver') {
@@ -248,6 +257,9 @@ export async function middleware(request: NextRequest) {
         }
         if (role === 'personal_banker') {
           return NextResponse.redirect(createRedirectUrl(request, '/services'));
+        }
+        if (role === 'auditor') {
+          return NextResponse.redirect(createRedirectUrl(request, '/audit-logs'));
         }
         return NextResponse.redirect(createRedirectUrl(request, '/'));
       }

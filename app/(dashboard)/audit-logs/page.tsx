@@ -6,6 +6,7 @@ import {
   History, Search, Download, Loader2, AlertTriangle, ChevronDown, ChevronRight, CheckCircle2, XCircle, Ban,
 } from 'lucide-react';
 import { AUDIT_ACTIONS, AUDIT_MODULES, AUDIT_ROLES } from '@/lib/auditTypes';
+import { useAuth } from '@/components/AuthProvider';
 
 interface AuditEntry {
   _id: string;
@@ -52,7 +53,7 @@ const ACTION_LABELS: Record<string, string> = {
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin', kyc: 'KYC Officer', senior_approver: 'Senior Approver', branch: 'Branch',
-  personal_banker: 'Personal Banker', marketing: 'Marketing', sanction_uploader: 'Sanctions Uploader',
+  personal_banker: 'Personal Banker', marketing: 'Marketing', sanction_uploader: 'Sanctions Uploader', auditor: 'Auditor',
   applicant: 'Applicant', system: 'System',
 };
 
@@ -77,6 +78,9 @@ const dateInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60
 const show = (v: any) => (v === null || v === undefined || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 
 export default function AuditLogPage() {
+  // Auditors read the log only: no links into the applications
+  const { user } = useAuth();
+  const canOpenApplications = user?.role !== 'auditor';
   const [filters, setFilters] = useState({
     from: dateInput(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)),
     to: dateInput(new Date()),
@@ -290,7 +294,7 @@ export default function AuditLogPage() {
                           <p className="text-[11px] text-gray-400 mt-0.5">{MODULE_LABELS[log.module] || log.module}</p>
                         </td>
                         <td className="px-3 py-3">
-                          {log.entityType === 'Customer' && log.entityId ? (
+                          {log.entityType === 'Customer' && log.entityId && canOpenApplications ? (
                             <Link href={`/customers/${log.entityId}`} onClick={e => e.stopPropagation()} className="text-blue-600 hover:underline">
                               {log.entityName || log.entityId}
                             </Link>

@@ -56,12 +56,12 @@ function csvCell(value: unknown): string {
 }
 
 /**
- * GET /api/audit-logs — admin only.
+ * GET /api/audit-logs — admin and auditor (read-only role: the Audit Log is all an auditor sees).
  * ?page&limit&module&action&role&status&user&entity&from&to  (from/to: ISO date-times)
  * ?format=csv downloads the filtered log (newest first, up to 10,000 rows).
  */
 export async function GET(request: NextRequest) {
-  const denied = requireRole(request, ['admin']);
+  const denied = requireRole(request, ['admin', 'auditor']);
   if (denied) return denied;
 
   try {

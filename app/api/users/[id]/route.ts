@@ -28,7 +28,7 @@ export async function PATCH(
 
     if (name) user.name = name;
     if (typeof phone === 'string') user.phone = phone;
-    if (role && ['admin', 'kyc', 'marketing', 'branch', 'senior_approver', 'sanction_uploader', 'personal_banker'].includes(role)) user.role = role;
+    if (role && ['admin', 'kyc', 'marketing', 'branch', 'senior_approver', 'sanction_uploader', 'personal_banker', 'auditor'].includes(role)) user.role = role;
     if (typeof branchCode === 'string') user.branchCode = branchCode;
     // Branch users and Personal Bankers must have a branch code
     if (['branch', 'personal_banker'].includes(user.role) && !user.branchCode) {

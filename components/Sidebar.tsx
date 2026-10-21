@@ -52,7 +52,7 @@ const menuItems: MenuItem[] = [
   { name: 'Products & Services', href: '/products', icon: Package, roles: ['admin', 'kyc'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin', 'kyc', 'marketing'] },
   { name: 'User Management', href: '/users', icon: Users, roles: ['admin'] },
-  { name: 'Audit Log', href: '/audit-logs', icon: History, roles: ['admin'] },
+  { name: 'Audit Log', href: '/audit-logs', icon: History, roles: ['admin', 'auditor'] },
 ];
 
 export default function Sidebar() {
@@ -136,6 +136,7 @@ export default function Sidebar() {
       case 'marketing': return 'Marketing';
       case 'branch': return `Branch (${user?.branchCode || ''})`;
       case 'personal_banker': return `Personal Banker (${user?.branchCode || ''})`;
+      case 'auditor': return 'Auditor';
       default: return 'User';
     }
   };

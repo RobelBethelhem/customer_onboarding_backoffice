@@ -11,7 +11,7 @@ interface UserRecord {
   _id: string;
   email: string;
   name: string;
-  role: 'admin' | 'kyc' | 'marketing' | 'branch' | 'senior_approver' | 'sanction_uploader' | 'personal_banker';
+  role: 'admin' | 'kyc' | 'marketing' | 'branch' | 'senior_approver' | 'sanction_uploader' | 'personal_banker' | 'auditor';
   branchCode?: string;
   phone?: string;
   isActive: boolean;
@@ -30,7 +30,7 @@ export default function UserManagementPage() {
     password: '',
     name: '',
     phone: '',
-    role: 'kyc' as 'admin' | 'kyc' | 'marketing' | 'branch' | 'senior_approver' | 'sanction_uploader' | 'personal_banker',
+    role: 'kyc' as 'admin' | 'kyc' | 'marketing' | 'branch' | 'senior_approver' | 'sanction_uploader' | 'personal_banker' | 'auditor',
     branchCode: '',
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -179,6 +179,8 @@ export default function UserManagementPage() {
         return <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-700">Branch</span>;
       case 'personal_banker':
         return <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-pink-100 text-pink-700">Personal Banker</span>;
+      case 'auditor':
+        return <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-slate-200 text-slate-700">Auditor</span>;
       default:
         return <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700">{role}</span>;
     }
@@ -308,6 +310,7 @@ export default function UserManagementPage() {
                   <option value="marketing">Marketing - Referral program only</option>
                   <option value="branch">Branch - View approved customers (read-only)</option>
                   <option value="personal_banker">Personal Banker (PBB) - Set up requested services for their branch</option>
+                  <option value="auditor">Auditor - View and export the Audit Log only (read-only)</option>
                 </select>
               </div>
 
