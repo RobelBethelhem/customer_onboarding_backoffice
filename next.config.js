@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   basePath: '',
+  // Docker image: a self-contained server (.next/standalone); set by the Dockerfile only
+  output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   reactStrictMode: true,
   // F10: do not advertise the framework; add baseline security headers.
   // NOTE: the `Server: nginx` header is set by the reverse proxy — set `server_tokens off;`
